@@ -238,7 +238,8 @@ export const TRANSLATIONS = {
     view: "View",
     tiles: "Tiles",
     list: "List",
-    box: "Box"
+    box: "Box",
+    rememberMe: "Keep me logged in for 30 days"
   },
   ar: {
     title: "دوار السعادة",
@@ -437,6 +438,7 @@ export const TRANSLATIONS = {
     view: "عرض",
     tiles: "مربعات",
     list: "قائمة",
-    box: "صندوق"
+    box: "صندوق",
+    rememberMe: "تذكرني لمدة 30 يوماً"
   }
 };

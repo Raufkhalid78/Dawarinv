@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { User as UserIcon, Lock, ArrowRight } from 'lucide-react';
+import { User as UserIcon, Lock, ArrowRight, Check } from 'lucide-react';
 import { TRANSLATIONS } from '../constants';
 import { Language, User } from '../types';
 
 interface LoginProps {
-  onLogin: (user: User) => void;
+  onLogin: (user: User, rememberMe: boolean) => void;
   language: Language;
   users: User[];
 }
@@ -12,6 +12,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin, language, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   
   const t = TRANSLATIONS[language];
@@ -21,7 +22,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, language, users }) => {
     const user = users.find(u => u.username === username && u.password === password);
     
     if (user) {
-      onLogin(user);
+      onLogin(user, rememberMe);
     } else {
       setError(t.invalidCredentials);
     }
@@ -66,6 +67,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, language, users }) => {
                 />
                 <Lock className="w-5 h-5 text-gray-400 absolute left-3 rtl:right-3 rtl:left-auto top-3.5" />
               </div>
+            </div>
+            
+            <div className="flex items-center">
+              <button 
+                type="button"
+                onClick={() => setRememberMe(!rememberMe)}
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+              >
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${rememberMe ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'}`}>
+                  {rememberMe && <Check className="w-3.5 h-3.5" />}
+                </div>
+                {t.rememberMe}
+              </button>
             </div>
 
             {error && (

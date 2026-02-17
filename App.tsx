@@ -19,9 +19,45 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Session State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<LocationId | null>(null);
+  // Session State - Lazy initialization to prevent flicker
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+        const savedUserStr = localStorage.getItem('dawar_user');
+        const expiryStr = localStorage.getItem('dawar_session_expiry');
+        if (savedUserStr && expiryStr) {
+            if (Date.now() < parseInt(expiryStr, 10)) {
+                return JSON.parse(savedUserStr);
+            }
+            // Clear expired session
+            localStorage.removeItem('dawar_user');
+            localStorage.removeItem('dawar_session_expiry');
+        }
+    } catch (e) {
+        console.error("Failed to restore session", e);
+    }
+    return null;
+  });
+
+  const [selectedLocation, setSelectedLocation] = useState<LocationId | null>(() => {
+      try {
+          const savedUserStr = localStorage.getItem('dawar_user');
+          const expiryStr = localStorage.getItem('dawar_session_expiry');
+          let user: User | null = null;
+          
+          if (savedUserStr && expiryStr && Date.now() < parseInt(expiryStr, 10)) {
+              user = JSON.parse(savedUserStr);
+          }
+
+          if (user) {
+            if (user.role === 'branch_manager') return user.branchCode || null;
+            if (user.role === 'mammal_employee') return 'mammal';
+            // Other roles usually want to select a location, so default to null
+          }
+      } catch (e) {
+          console.error("Failed to restore location selection", e);
+      }
+      return null;
+  });
   
   // Theme & Language State - Initialize from localStorage
   const [language, setLanguage] = useState<Language>(() => {
@@ -204,9 +240,19 @@ const App: React.FC = () => {
     });
   };
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, rememberMe: boolean) => {
     setCurrentUser(user);
-    requestNotificationPermission(); // Ask for notifications on successful login
+    requestNotificationPermission();
+
+    // Session persistence logic
+    const duration = rememberMe 
+      ? 30 * 24 * 60 * 60 * 1000 // 30 days
+      : 60 * 60 * 1000; // 1 hour
+      
+    const expiry = Date.now() + duration;
+    localStorage.setItem('dawar_user', JSON.stringify(user));
+    localStorage.setItem('dawar_session_expiry', expiry.toString());
+
     if (user.role === 'warehouse_manager') {
        setSelectedLocation(null);
     } else if (user.role === 'branch_manager') {
@@ -222,6 +268,8 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setSelectedLocation(null);
     notifiedIds.current.clear();
+    localStorage.removeItem('dawar_user');
+    localStorage.removeItem('dawar_session_expiry');
   };
 
   const handleCreateUser = async (newUser: Omit<User, 'id'>) => {
