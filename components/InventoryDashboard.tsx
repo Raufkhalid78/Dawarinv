@@ -54,6 +54,7 @@ interface InventoryDashboardProps {
   onDeleteItem: (locationId: string, itemId: string) => void;
   onRecordUsage: (itemId: string, quantity: number, notes: string) => void;
   userRole: string;
+  userBranchCode?: string;
   incomingTransfers: Transaction[];
   outgoingTransfers: Transaction[];
   outgoingApprovals: Transaction[];
@@ -75,6 +76,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   onDeleteItem,
   onRecordUsage,
   userRole,
+  userBranchCode,
   incomingTransfers,
   outgoingTransfers,
   outgoingApprovals,
@@ -421,10 +423,12 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                     <ArrowRightLeft className="w-5 h-5" />
                     <span className="hidden sm:inline">{t.transfer}</span>
                  </button>
-                 <button onClick={() => { setItemToEdit(null); setIsAddItemModalOpen(true); }} className="flex items-center gap-2 px-4 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-brand-200 dark:shadow-none">
-                    <Plus className="w-5 h-5" />
-                    <span className="hidden sm:inline">{t.addItem}</span>
-                 </button>
+                 {(userRole !== 'branch_manager' || userBranchCode === locationId) && (
+                    <button onClick={() => { setItemToEdit(null); setIsAddItemModalOpen(true); }} className="flex items-center gap-2 px-4 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-brand-200 dark:shadow-none">
+                        <Plus className="w-5 h-5" />
+                        <span className="hidden sm:inline">{t.addItem}</span>
+                    </button>
+                 )}
               </div>
             )}
           </div>
@@ -463,8 +467,14 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                         
                         {!isGlobalView && (
                              <div className="flex gap-1 w-full mt-auto">
-                                <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Pencil className="w-3 h-3 mx-auto" /></button>
-                                <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><ArrowDownCircle className="w-3 h-3 mx-auto" /></button>
+                                {(userRole !== 'branch_manager' || userBranchCode === locationId) ? (
+                                    <>
+                                       <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Pencil className="w-3 h-3 mx-auto" /></button>
+                                       <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><ArrowDownCircle className="w-3 h-3 mx-auto" /></button>
+                                    </>
+                                ) : (
+                                    <div className="flex-1 py-1.5 text-[10px] text-gray-400 italic">View Only</div>
+                                )}
                              </div>
                         )}
                     </div>
@@ -503,9 +513,15 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                 </button>
                                 {activeActionId === item.id && (
                                    <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20 z-[30]">
-                                      <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Pencil className="w-4 h-4" /> {t.edit}</button>
-                                      <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}</button>
-                                      <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2"><Trash2 className="w-4 h-4" /> {t.delete}</button>
+                                       {(userRole !== 'branch_manager' || userBranchCode === locationId) ? (
+                                           <>
+                                              <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Pencil className="w-4 h-4" /> {t.edit}</button>
+                                              <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}</button>
+                                              <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2"><Trash2 className="w-4 h-4" /> {t.delete}</button>
+                                           </>
+                                       ) : (
+                                           <div className="px-4 py-2 text-xs text-gray-400 italic">View Only</div>
+                                       )}
                                    </div>
                                 )}
                              </div>
@@ -540,15 +556,22 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           
                           {activeActionId === item.id && (
                              <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20 animate-in fade-in zoom-in-95 duration-100 z-[30]">
-                                <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                                   <Pencil className="w-4 h-4" /> {t.edit}
-                                </button>
-                                <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                                   <ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}
-                                </button>
-                                <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2">
-                                   <Trash2 className="w-4 h-4" /> {t.delete}
-                                </button>
+                                {(userRole !== 'branch_manager' || userBranchCode === locationId) && (
+                                    <>
+                                        <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <Pencil className="w-4 h-4" /> {t.edit}
+                                        </button>
+                                        <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}
+                                        </button>
+                                        <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2">
+                                            <Trash2 className="w-4 h-4" /> {t.delete}
+                                        </button>
+                                    </>
+                                )}
+                                {(userRole === 'branch_manager' && userBranchCode !== locationId) && (
+                                    <div className="px-4 py-2 text-xs text-gray-400 italic">View Only</div>
+                                )}
                              </div>
                           )}
                         </div>

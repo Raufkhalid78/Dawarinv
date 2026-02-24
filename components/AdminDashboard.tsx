@@ -92,11 +92,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         role: UserRole;
         branchCode?: string;
         branchName?: string;
+        accessibleBranches: string[];
     }>({
         name: '',
         username: '',
         password: '',
-        role: 'warehouse_manager'
+        role: 'warehouse_manager',
+        accessibleBranches: []
     });
 
     const t = TRANSLATIONS[language];
@@ -104,7 +106,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const openCreateModal = () => {
         setEditingUserId(null);
-        setUserForm({ name: '', username: '', password: '', role: 'warehouse_manager', branchCode: '', branchName: '' });
+        setUserForm({ name: '', username: '', password: '', role: 'warehouse_manager', branchCode: '', branchName: '', accessibleBranches: [] });
         setLocationType('central');
         setShowUserModal(true);
     };
@@ -117,7 +119,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             password: '', 
             role: user.role, 
             branchCode: user.branchCode || '', 
-            branchName: user.branchName || '' 
+            branchName: user.branchName || '',
+            accessibleBranches: user.accessibleBranches || []
         });
         setLocationType(user.role === 'branch_manager' ? 'branch' : 'central');
         setShowUserModal(true);
@@ -617,6 +620,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.branchCode}</label>
                                         <input required type="text" value={userForm.branchCode} onChange={e => setUserForm({...userForm, branchCode: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Accessible Locations</label>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
+                                            {availableLocations.map(loc => (
+                                                <label key={loc.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-1 rounded transition-colors">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={userForm.accessibleBranches.includes(loc.id)}
+                                                        onChange={(e) => {
+                                                            const checked = e.target.checked;
+                                                            setUserForm(prev => ({
+                                                                ...prev,
+                                                                accessibleBranches: checked 
+                                                                    ? [...prev.accessibleBranches, loc.id]
+                                                                    : prev.accessibleBranches.filter(id => id !== loc.id)
+                                                            }));
+                                                        }}
+                                                        className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
+                                                    />
+                                                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                        {loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}

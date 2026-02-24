@@ -34,6 +34,7 @@ export interface User {
   role: UserRole;
   branchCode?: string;
   branchName?: string;
+  accessibleBranches?: string[];
 }
 
 export interface Transaction {

@@ -104,7 +104,8 @@ const App: React.FC = () => {
                 name: u.name,
                 role: u.role as UserRole,
                 branchCode: u.branch_code,
-                branchName: u.branch_name
+                branchName: u.branch_name,
+                accessibleBranches: u.accessible_branches || []
             }));
         }
 
@@ -208,7 +209,7 @@ const App: React.FC = () => {
 
   // Dynamically calculate available locations
   const availableLocations = useMemo<LocationData[]>(() => {
-      const dynamicBranches: LocationData[] = users
+      let dynamicBranches: LocationData[] = users
           .filter(u => u.role === 'branch_manager' && u.branchCode)
           .map(u => ({
               id: u.branchCode!,
@@ -220,9 +221,22 @@ const App: React.FC = () => {
       
       const uniqueIds = new Set(STATIC_LOCATIONS.map(l => l.id));
       const newBranches = dynamicBranches.filter(b => !uniqueIds.has(b.id));
+      const allLocations = [...STATIC_LOCATIONS, ...newBranches];
 
-      return [...STATIC_LOCATIONS, ...newBranches];
-  }, [users]);
+      // Filter based on user permissions
+      if (currentUser) {
+          if (currentUser.role === 'branch_manager') {
+              const accessible = new Set(currentUser.accessibleBranches || []);
+              accessible.add(currentUser.branchCode!);
+              return allLocations.filter(loc => accessible.has(loc.id));
+          }
+          if (currentUser.role === 'mammal_employee') {
+              return allLocations.filter(loc => loc.id === 'mammal');
+          }
+      }
+
+      return allLocations;
+  }, [users, currentUser]);
 
   const toggleLanguage = () => {
     setLanguage(prev => {
@@ -284,7 +298,8 @@ const App: React.FC = () => {
         name: newUser.name,
         role: newUser.role,
         branch_code: newUser.branchCode,
-        branch_name: newUser.branchName
+        branch_name: newUser.branchName,
+        accessible_branches: newUser.accessibleBranches || []
     }]).select();
     
     // If backend returns real ID, we might want to refresh, but optimistic is fine for now
@@ -299,7 +314,8 @@ const App: React.FC = () => {
         name: updatedUser.name,
         role: updatedUser.role,
         branch_code: updatedUser.branchCode,
-        branch_name: updatedUser.branchName
+        branch_name: updatedUser.branchName,
+        accessible_branches: updatedUser.accessibleBranches || []
       };
 
       if (updatedUser.password && updatedUser.password.trim() !== '') {
@@ -316,6 +332,12 @@ const App: React.FC = () => {
   };
 
   const handleAddItem = async (locationId: string, item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
+      // Enforce branch manager restriction
+      if (currentUser?.role === 'branch_manager' && currentUser.branchCode !== locationId) {
+          console.error("Branch managers can only add items to their own branch.");
+          return;
+      }
+
       // Optimistic Update
       const newItem: InventoryItem = {
           ...item,
@@ -782,6 +804,7 @@ const App: React.FC = () => {
         onDeleteItem={handleDeleteItem}
         onRecordUsage={(itemId, qty, notes) => handleDailyLog('usage', itemId, qty, notes)}
         userRole={currentUser.role}
+        userBranchCode={currentUser.branchCode}
         incomingTransfers={transactions.filter(t => t.toLocation === selectedLocation && t.status === 'pending_target')}
         outgoingTransfers={transactions.filter(t => t.fromLocation === selectedLocation && (t.status === 'pending_target' || t.status === 'pending_source'))}
         outgoingApprovals={transactions.filter(t => t.fromLocation === selectedLocation && t.status === 'pending_source')}
