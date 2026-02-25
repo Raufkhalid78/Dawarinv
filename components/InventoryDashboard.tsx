@@ -641,9 +641,16 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       <AddItemModal 
         isOpen={isAddItemModalOpen}
         onClose={() => setIsAddItemModalOpen(false)}
-        onSubmit={(item) => onAddItem(locationId, item)}
+        onSubmit={(item) => {
+          if (itemToEdit) {
+            onEditItem(locationId, { ...itemToEdit, ...item });
+          } else {
+            onAddItem(locationId, item);
+          }
+        }}
         language={language}
         initialData={itemToEdit}
+        existingItems={inventory}
       />
 
       <UsageModal

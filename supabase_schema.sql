@@ -41,7 +41,10 @@ create table if not exists public.inventory_items (
   quantity numeric not null default 0,
   unit text not null,
   min_threshold numeric not null default 0,
-  last_updated timestamp with time zone default now()
+  last_updated timestamp with time zone default now(),
+  -- Prevent duplicate item names in the same location
+  unique(location_id, name_en),
+  unique(location_id, name_ar)
 );
 
 -- 4. Transactions Table

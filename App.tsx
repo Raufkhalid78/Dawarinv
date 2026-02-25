@@ -287,12 +287,13 @@ const App: React.FC = () => {
   };
 
   const handleCreateUser = async (newUser: Omit<User, 'id'>) => {
+    const tempId = generateId();
     // Optimistic Update
-    const user: User = { ...newUser, id: generateId() };
+    const user: User = { ...newUser, id: tempId };
     setUsers(prev => [...prev, user]);
 
     // Async Backend Call
-    const { data } = await supabase.from('app_users').insert([{
+    const { data, error } = await supabase.from('app_users').insert([{
         username: newUser.username,
         password: newUser.password,
         name: newUser.name,
@@ -302,7 +303,19 @@ const App: React.FC = () => {
         accessible_branches: newUser.accessibleBranches || []
     }]).select();
     
-    // If backend returns real ID, we might want to refresh, but optimistic is fine for now
+    if (!error && data && data[0]) {
+        const realUser: User = {
+            id: data[0].id,
+            username: data[0].username,
+            password: data[0].password,
+            name: data[0].name,
+            role: data[0].role,
+            branchCode: data[0].branch_code,
+            branchName: data[0].branch_name,
+            accessibleBranches: data[0].accessible_branches
+        };
+        setUsers(prev => prev.map(u => u.id === tempId ? realUser : u));
+    }
   };
 
   const handleEditUser = async (updatedUser: User) => {
@@ -338,10 +351,21 @@ const App: React.FC = () => {
           return;
       }
 
+      // Check for duplicates
+      const existing = (inventory[locationId] || []).find(i => 
+          i.nameEn.toLowerCase() === item.nameEn.toLowerCase() || 
+          i.nameAr === item.nameAr
+      );
+      if (existing) {
+          alert(language === 'ar' ? 'هذا المنتج موجود بالفعل في هذا الموقع' : 'This item already exists in this location');
+          return;
+      }
+
+      const tempId = generateId();
       // Optimistic Update
       const newItem: InventoryItem = {
           ...item,
-          id: generateId(),
+          id: tempId,
           lastUpdated: new Date().toISOString(),
           locationId
       };
@@ -351,7 +375,7 @@ const App: React.FC = () => {
           [locationId]: [...(prev[locationId] || []), newItem]
       }));
 
-      await supabase.from('inventory_items').insert([{
+      const { data, error } = await supabase.from('inventory_items').insert([{
           location_id: locationId,
           name_en: item.nameEn,
           name_ar: item.nameAr,
@@ -360,10 +384,41 @@ const App: React.FC = () => {
           quantity: item.quantity,
           unit: item.unit,
           min_threshold: item.minThreshold
-      }]);
+      }]).select();
+
+      if (!error && data && data[0]) {
+          const realItem: InventoryItem = {
+              id: data[0].id,
+              locationId: data[0].location_id,
+              nameEn: data[0].name_en,
+              nameAr: data[0].name_ar,
+              description: data[0].description,
+              category: data[0].category,
+              quantity: data[0].quantity,
+              unit: data[0].unit,
+              minThreshold: data[0].min_threshold,
+              lastUpdated: data[0].last_updated
+          };
+          setInventory(prev => ({
+              ...prev,
+              [locationId]: prev[locationId].map(i => i.id === tempId ? realItem : i)
+          }));
+      }
   };
 
   const handleEditItem = async (locationId: string, updatedItem: InventoryItem) => {
+      // Check for duplicates (excluding the item itself)
+      const existing = (inventory[locationId] || []).find(i => 
+          i.id !== updatedItem.id && (
+              i.nameEn.toLowerCase() === updatedItem.nameEn.toLowerCase() || 
+              i.nameAr === updatedItem.nameAr
+          )
+      );
+      if (existing) {
+          alert(language === 'ar' ? 'هذا الاسم مستخدم بالفعل لمنتج آخر' : 'This name is already used by another item');
+          return;
+      }
+
       // Optimistic Update
       setInventory(prev => ({
           ...prev,
@@ -471,7 +526,30 @@ const App: React.FC = () => {
             unit: t.unit,
             performed_by: t.performedBy
         }));
-        await supabase.from('transactions').insert(dbTransactions);
+        
+        const { data, error } = await supabase.from('transactions').insert(dbTransactions).select();
+        
+        if (!error && data) {
+            // Map real IDs back to transactions
+            setTransactions(prev => {
+                let updated = [...prev];
+                data.forEach((dbTx: any) => {
+                    // Match by group and item name (best we can do since we don't have temp IDs in DB)
+                    const index = updated.findIndex(t => 
+                        t.transferGroupId === dbTx.transfer_group_id && 
+                        t.itemName === dbTx.item_name &&
+                        t.id.length < 15 // Check if it's a temp ID (random string vs UUID)
+                    );
+                    if (index !== -1) {
+                        updated[index] = {
+                            ...updated[index],
+                            id: dbTx.id
+                        };
+                    }
+                });
+                return updated;
+            });
+        }
     }
   };
 
@@ -558,54 +636,60 @@ const App: React.FC = () => {
   const handleRejectTransfer = async (transaction: Transaction, reason: string) => {
       if (!currentUser) return;
       const sourceLocation = transaction.fromLocation!;
+      const wasDeducted = transaction.status === 'pending_target';
+      
       const sourceItem = (inventory[sourceLocation] || []).find(i => i.nameEn === transaction.itemName || i.nameAr === transaction.itemName);
 
       // Optimistic Update
-      if (sourceItem) {
-           setInventory(prev => ({
-              ...prev,
-              [sourceLocation]: prev[sourceLocation].map(i => 
-                  i.id === sourceItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
-              )
-          }));
-      } else {
-          // Restore item
-          const restoredItem: InventoryItem = {
-              id: generateId(),
-              locationId: sourceLocation,
-              nameEn: transaction.itemName,
-              nameAr: transaction.itemName,
-              category: 'Returned',
-              quantity: transaction.quantity,
-              unit: transaction.unit,
-              minThreshold: 0,
-              lastUpdated: new Date().toISOString()
-          };
-          setInventory(prev => ({
-              ...prev,
-              [sourceLocation]: [...(prev[sourceLocation] || []), restoredItem]
-          }));
+      if (wasDeducted) {
+          if (sourceItem) {
+               setInventory(prev => ({
+                  ...prev,
+                  [sourceLocation]: prev[sourceLocation].map(i => 
+                      i.id === sourceItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
+                  )
+              }));
+          } else {
+              // Restore item
+              const restoredItem: InventoryItem = {
+                  id: generateId(),
+                  locationId: sourceLocation,
+                  nameEn: transaction.itemName,
+                  nameAr: transaction.itemName,
+                  category: 'Returned',
+                  quantity: transaction.quantity,
+                  unit: transaction.unit,
+                  minThreshold: 0,
+                  lastUpdated: new Date().toISOString()
+              };
+              setInventory(prev => ({
+                  ...prev,
+                  [sourceLocation]: [...(prev[sourceLocation] || []), restoredItem]
+              }));
+          }
       }
 
       setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'rejected', rejectionReason: reason } : t));
 
       // Backend
-      if (sourceItem) {
-           await supabase.from('inventory_items').update({
-              quantity: sourceItem.quantity + transaction.quantity
-          }).eq('id', sourceItem.id);
-      } else {
-          await supabase.from('inventory_items').insert([{
-              location_id: sourceLocation,
-              name_en: transaction.itemName,
-              name_ar: transaction.itemName,
-              category: 'Returned',
-              quantity: transaction.quantity,
-              unit: transaction.unit,
-              min_threshold: 0
-          }]);
+      if (wasDeducted) {
+          if (sourceItem) {
+               await supabase.from('inventory_items').update({
+                  quantity: sourceItem.quantity + transaction.quantity
+              }).eq('id', sourceItem.id);
+          } else {
+              await supabase.from('inventory_items').insert([{
+                  location_id: sourceLocation,
+                  name_en: transaction.itemName,
+                  name_ar: transaction.itemName,
+                  category: 'Returned',
+                  quantity: transaction.quantity,
+                  unit: transaction.unit,
+                  min_threshold: 0
+              }]);
+          }
       }
-
+  
       await supabase.from('transactions').update({
           status: 'rejected',
           rejection_reason: reason
@@ -626,8 +710,9 @@ const App: React.FC = () => {
               [location]: prev[location].map(i => i.id === itemId ? { ...i, quantity: newQty } : i)
           }));
 
+          const tempId = generateId();
           const newTx: Transaction = {
-              id: generateId(),
+              id: tempId,
               date: new Date().toISOString(),
               type: type,
               status: 'completed',
@@ -644,7 +729,7 @@ const App: React.FC = () => {
 
           // Backend
           await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', itemId);
-          await supabase.from('transactions').insert([{
+          const { data, error } = await supabase.from('transactions').insert([{
               date: newTx.date,
               type: type,
               status: 'completed',
@@ -655,7 +740,26 @@ const App: React.FC = () => {
               unit: item.unit,
               performed_by: currentUser.name,
               notes: notes
-          }]);
+          }]).select();
+
+          if (!error && data && data[0]) {
+              const realTx: Transaction = {
+                  id: data[0].id,
+                  transferGroupId: data[0].transfer_group_id,
+                  date: data[0].date,
+                  type: data[0].type as any,
+                  status: data[0].status as any,
+                  fromLocation: data[0].from_location,
+                  toLocation: data[0].to_location,
+                  itemName: data[0].item_name,
+                  quantity: data[0].quantity,
+                  unit: data[0].unit,
+                  performedBy: data[0].performed_by,
+                  notes: data[0].notes,
+                  rejectionReason: data[0].rejection_reason
+              };
+              setTransactions(prev => prev.map(t => t.id === tempId ? realTx : t));
+          }
       }
   };
 
@@ -715,7 +819,23 @@ const App: React.FC = () => {
       }));
       
       if (dbTxs.length > 0) {
-          await supabase.from('transactions').insert(dbTxs);
+          const { data, error } = await supabase.from('transactions').insert(dbTxs).select();
+          if (!error && data) {
+              setTransactions(prev => {
+                  let updated = [...prev];
+                  data.forEach((dbTx: any) => {
+                      const index = updated.findIndex(t => 
+                          t.itemName === dbTx.item_name && 
+                          t.date === dbTx.date &&
+                          t.id.length < 15
+                      );
+                      if (index !== -1) {
+                          updated[index] = { ...updated[index], id: dbTx.id };
+                      }
+                  });
+                  return updated;
+              });
+          }
       }
   };
 

@@ -9,9 +9,10 @@ interface AddItemModalProps {
     onSubmit: (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => void;
     language: Language;
     initialData?: InventoryItem | null;
+    existingItems: InventoryItem[];
 }
 
-const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, language, initialData }) => {
+const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, language, initialData, existingItems }) => {
     const t = TRANSLATIONS[language];
     
     const [newItem, setNewItem] = useState({
@@ -56,6 +57,18 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
         // Validation: Ensure numbers are valid and non-negative
         if (isNaN(qty) || qty < 0 || isNaN(threshold) || threshold < 0) {
             setError(t.invalidNumber);
+            return;
+        }
+
+        // Duplicate Check
+        const isDuplicate = existingItems.some(item => {
+            if (initialData && item.id === initialData.id) return false;
+            return item.nameEn.toLowerCase() === newItem.nameEn.toLowerCase() || 
+                   item.nameAr === newItem.nameAr;
+        });
+
+        if (isDuplicate) {
+            setError(language === 'ar' ? 'هذا المنتج موجود بالفعل' : 'This item already exists');
             return;
         }
 

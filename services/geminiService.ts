@@ -2,15 +2,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { InventoryItem, Language } from "../types";
 
-// Always use process.env.API_KEY directly and initialize GoogleGenAI inside or right before use
+// Always use process.env.GEMINI_API_KEY directly and initialize GoogleGenAI inside or right before use
 export const analyzeInventory = async (
   locationName: string, 
   items: InventoryItem[], 
   userQuery: string,
   language: Language
 ): Promise<string> => {
-  // MUST use new GoogleGenAI({ apiKey: process.env.API_KEY })
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // MUST use new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const modelId = 'gemini-3-flash-preview';
 

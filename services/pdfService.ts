@@ -36,8 +36,8 @@ export const parseTransferDocument = async (
   inventoryItems: InventoryItem[], 
   availableLocations: LocationData[]
 ): Promise<ExtractedTransfer> => {
-  // Always use new GoogleGenAI({ apiKey: process.env.API_KEY }) inside the function
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Always use new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) inside the function
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   // Prepare context for the AI
   const itemsContext = inventoryItems.map(i => `ID: "${i.id}", Name EN: "${i.nameEn}", Name AR: "${i.nameAr}", Unit: "${i.unit}"`).join('\n');

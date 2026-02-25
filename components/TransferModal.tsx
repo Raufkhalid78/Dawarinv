@@ -51,12 +51,28 @@ const TransferModal: React.FC<TransferModalProps> = ({
         if (isOpen) {
             setError('');
             if (!isGlobal) setSourceLocation(currentLocation);
-            setTransferList([]);
-            setTargetLocation('');
+            
+            if (initialData) {
+                setTargetLocation(initialData.targetLocationId || '');
+                const list: TransferItem[] = initialData.items.map(di => {
+                    const item = items.find(i => i.id === di.itemId);
+                    return {
+                        itemId: di.itemId,
+                        itemName: item ? (language === 'ar' ? item.nameAr : item.nameEn) : 'Unknown',
+                        quantity: di.quantity,
+                        unit: item?.unit || ''
+                    };
+                });
+                setTransferList(list);
+            } else {
+                setTransferList([]);
+                setTargetLocation('');
+            }
+            
             setSelectedItemId('');
             setQuantity('');
         }
-    }, [isOpen, currentLocation, isGlobal]);
+    }, [isOpen, currentLocation, isGlobal, initialData, items, language]);
 
     const availableItemsForSource = items.filter(i => isGlobal ? i.locationId === sourceLocation : true);
 
