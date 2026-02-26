@@ -882,7 +882,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           const group = [...groupedIncoming, ...groupedApprovals, ...groupedOutgoing].find(g => g[0] === selectedTransferGroup);
                           return (group?.[1] || []).map(tx => (
                               <div key={tx.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                                  <span className="font-medium text-gray-900 dark:text-white">{tx.itemName}</span>
+                                  <span className="font-medium text-gray-900 dark:text-white">{language === 'ar' ? tx.itemNameAr : tx.itemNameEn}</span>
                                   <span className="font-bold text-brand-600 dark:text-brand-400">{tx.quantity} {tx.unit}</span>
                               </div>
                           ));

@@ -36,7 +36,7 @@ export const exportTransferPDF = (transactions: Transaction[], language: Languag
 
   // Table
   const tableData = transactions.map(tx => [
-    tx.itemName,
+    language === 'ar' ? tx.itemNameAr : tx.itemNameEn,
     `${tx.quantity} ${tx.unit}`
   ]);
 
@@ -168,7 +168,7 @@ export const exportDailyReportPDF = (transactions: Transaction[], locationName: 
     autoTable(doc, {
       startY: finalY + 5,
       head: [[t.itemName, t.quantity, t.from]],
-      body: received.map(tx => [tx.itemName, `${tx.quantity} ${tx.unit}`, tx.fromLocation || '-']),
+      body: received.map(tx => [language === 'ar' ? tx.itemNameAr : tx.itemNameEn, `${tx.quantity} ${tx.unit}`, tx.fromLocation || '-']),
       theme: 'striped',
       headStyles: { fillColor: [34, 197, 94] }, // Green-500
       styles: { font: isRtl ? 'Cairo' : 'helvetica', halign: isRtl ? 'right' : 'left' }
@@ -185,7 +185,7 @@ export const exportDailyReportPDF = (transactions: Transaction[], locationName: 
     autoTable(doc, {
       startY: finalY + 5,
       head: [[t.itemName, t.quantity, t.notes]],
-      body: used.map(tx => [tx.itemName, `${tx.quantity} ${tx.unit}`, tx.notes || '-']),
+      body: used.map(tx => [language === 'ar' ? tx.itemNameAr : tx.itemNameEn, `${tx.quantity} ${tx.unit}`, tx.notes || '-']),
       theme: 'striped',
       headStyles: { fillColor: [239, 68, 68] }, // Red-500
       styles: { font: isRtl ? 'Cairo' : 'helvetica', halign: isRtl ? 'right' : 'left' }
@@ -239,7 +239,7 @@ export const exportDailyReportExcel = (transactions: Transaction[], locationName
     if (received.length > 0) {
       const receivedData = received.map(tx => ({
         [t.date]: new Date(tx.date).toLocaleDateString(),
-        [t.itemName]: tx.itemName,
+        [t.itemName]: language === 'ar' ? tx.itemNameAr : tx.itemNameEn,
         [t.quantity]: tx.quantity,
         [t.unit]: tx.unit,
         [t.from]: tx.fromLocation,
@@ -253,7 +253,7 @@ export const exportDailyReportExcel = (transactions: Transaction[], locationName
     if (used.length > 0) {
       const usedData = used.map(tx => ({
         [t.date]: new Date(tx.date).toLocaleDateString(),
-        [t.itemName]: tx.itemName,
+        [t.itemName]: language === 'ar' ? tx.itemNameAr : tx.itemNameEn,
         [t.quantity]: tx.quantity,
         [t.unit]: tx.unit,
         [t.notes]: tx.notes,

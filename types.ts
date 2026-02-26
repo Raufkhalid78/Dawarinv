@@ -45,7 +45,8 @@ export interface Transaction {
   status: TransactionStatus;
   fromLocation?: string;
   toLocation?: string;
-  itemName: string; // We'll store the name used during the transaction
+  itemNameEn: string;
+  itemNameAr: string;
   quantity: number;
   unit: string;
   performedBy: string;

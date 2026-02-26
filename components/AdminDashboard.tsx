@@ -550,7 +550,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                                     <td className="px-4 sm:px-6 py-4 uppercase font-bold text-[9px] sm:text-[10px]">
                                                         {tx.type === 'transfer' ? <span className="text-blue-600">{t.transfer}</span> : tx.type === 'usage' ? <span className="text-red-600">{t.usage}</span> : <span className="text-green-600">{t.receive}</span>}
                                                     </td>
-                                                    <td className="px-4 sm:px-6 py-4 font-medium truncate max-w-[100px] sm:max-w-none">{tx.itemName}</td>
+                                                    <td className="px-4 sm:px-6 py-4 font-medium truncate max-w-[100px] sm:max-w-none">{language === 'ar' ? tx.itemNameAr : tx.itemNameEn}</td>
                                                     <td className="hidden sm:table-cell px-6 py-4 text-gray-500 truncate max-w-[120px]">{tx.performedBy}</td>
                                                     <td className="px-4 sm:px-6 py-4 font-bold">
                                                         <span className={tx.status === 'completed' ? 'text-green-600' : tx.status === 'rejected' ? 'text-red-600' : 'text-orange-600'}>{t[tx.status] || tx.status}</span>

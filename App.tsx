@@ -161,7 +161,8 @@ const App: React.FC = () => {
                 status: t.status as TransactionStatus,
                 fromLocation: t.from_location,
                 toLocation: t.to_location,
-                itemName: t.item_name,
+                itemNameEn: t.item_name_en,
+                itemNameAr: t.item_name_ar,
                 quantity: Number(t.quantity),
                 unit: t.unit,
                 performedBy: t.performed_by,
@@ -232,7 +233,7 @@ const App: React.FC = () => {
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification(t_text.incomingRequests, {
-                body: `${tx.itemName}: ${tx.quantity} ${tx.unit} ${t_text.from} ${tx.fromLocation}`,
+                body: `${language === 'ar' ? tx.itemNameAr : tx.itemNameEn}: ${tx.quantity} ${tx.unit} ${t_text.from} ${tx.fromLocation}`,
                 icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png'
             });
           } catch (e) { console.error("Notification failed", e); }
@@ -561,7 +562,8 @@ const App: React.FC = () => {
                 status: status,
                 fromLocation: fromLocation,
                 toLocation: toLocation,
-                itemName: language === 'ar' ? sourceItem.nameAr : sourceItem.nameEn,
+                itemNameEn: sourceItem.nameEn,
+                itemNameAr: sourceItem.nameAr,
                 quantity: transferItem.quantity,
                 unit: sourceItem.unit,
                 performedBy: currentUser.name
@@ -597,7 +599,8 @@ const App: React.FC = () => {
             status: t.status,
             from_location: t.fromLocation,
             to_location: t.toLocation,
-            item_name: t.itemName,
+            item_name_en: t.itemNameEn,
+            item_name_ar: t.itemNameAr,
             quantity: t.quantity,
             unit: t.unit,
             performed_by: t.performedBy
@@ -613,7 +616,7 @@ const App: React.FC = () => {
                     // Match by group and item name (best we can do since we don't have temp IDs in DB)
                     const index = updated.findIndex(t => 
                         t.transferGroupId === dbTx.transfer_group_id && 
-                        t.itemName === dbTx.item_name &&
+                        t.itemNameEn === dbTx.item_name_en &&
                         t.id.length < 15 // Check if it's a temp ID (random string vs UUID)
                     );
                     if (index !== -1) {
@@ -632,7 +635,7 @@ const App: React.FC = () => {
   const handleConfirmSourceTransfer = async (transaction: Transaction) => {
       if (!currentUser) return;
       
-      const sourceItem = (inventory[transaction.fromLocation!] || []).find(i => i.nameEn === transaction.itemName || i.nameAr === transaction.itemName);
+      const sourceItem = (inventory[transaction.fromLocation!] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
       
       // Optimistic Update
       if (sourceItem) {
@@ -661,7 +664,7 @@ const App: React.FC = () => {
       
       // Optimistic Update
       const existingItems = inventory[targetLocation] || [];
-      const destItem = existingItems.find(i => i.nameEn === transaction.itemName || i.nameAr === transaction.itemName);
+      const destItem = existingItems.find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
 
       if (destItem) {
           setInventory(prev => ({
@@ -674,8 +677,8 @@ const App: React.FC = () => {
           const newItem: InventoryItem = {
               id: generateId(),
               locationId: targetLocation,
-              nameEn: transaction.itemName,
-              nameAr: transaction.itemName,
+              nameEn: transaction.itemNameEn,
+              nameAr: transaction.itemNameAr,
               category: 'Received',
               quantity: transaction.quantity,
               unit: transaction.unit,
@@ -698,8 +701,8 @@ const App: React.FC = () => {
       } else {
           await supabase.from('inventory_items').insert([{
               location_id: targetLocation,
-              name_en: transaction.itemName,
-              name_ar: transaction.itemName,
+              name_en: transaction.itemNameEn,
+              name_ar: transaction.itemNameAr,
               category: 'Received',
               quantity: transaction.quantity,
               unit: transaction.unit,
@@ -714,7 +717,7 @@ const App: React.FC = () => {
       const sourceLocation = transaction.fromLocation!;
       const wasDeducted = transaction.status === 'pending_target';
       
-      const sourceItem = (inventory[sourceLocation] || []).find(i => i.nameEn === transaction.itemName || i.nameAr === transaction.itemName);
+      const sourceItem = (inventory[sourceLocation] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
 
       // Optimistic Update
       if (wasDeducted) {
@@ -730,8 +733,8 @@ const App: React.FC = () => {
               const restoredItem: InventoryItem = {
                   id: generateId(),
                   locationId: sourceLocation,
-                  nameEn: transaction.itemName,
-                  nameAr: transaction.itemName,
+                  nameEn: transaction.itemNameEn,
+                  nameAr: transaction.itemNameAr,
                   category: 'Returned',
                   quantity: transaction.quantity,
                   unit: transaction.unit,
@@ -756,8 +759,8 @@ const App: React.FC = () => {
           } else {
               await supabase.from('inventory_items').insert([{
                   location_id: sourceLocation,
-                  name_en: transaction.itemName,
-                  name_ar: transaction.itemName,
+                  name_en: transaction.itemNameEn,
+                  name_ar: transaction.itemNameAr,
                   category: 'Returned',
                   quantity: transaction.quantity,
                   unit: transaction.unit,
@@ -794,7 +797,8 @@ const App: React.FC = () => {
               status: 'completed',
               fromLocation: type === 'usage' ? location : 'External Supplier',
               toLocation: type === 'usage' ? 'Consumed' : location,
-              itemName: language === 'ar' ? item.nameAr : item.nameEn,
+              itemNameEn: item.nameEn,
+              itemNameAr: item.nameAr,
               quantity: quantity,
               unit: item.unit,
               performedBy: currentUser.name,
@@ -811,7 +815,8 @@ const App: React.FC = () => {
               status: 'completed',
               from_location: newTx.fromLocation,
               to_location: newTx.toLocation,
-              item_name: newTx.itemName,
+              item_name_en: newTx.itemNameEn,
+              item_name_ar: newTx.itemNameAr,
               quantity: quantity,
               unit: item.unit,
               performed_by: currentUser.name,
@@ -827,7 +832,8 @@ const App: React.FC = () => {
                   status: data[0].status as any,
                   fromLocation: data[0].from_location,
                   toLocation: data[0].to_location,
-                  itemName: data[0].item_name,
+                  itemNameEn: data[0].item_name_en,
+                  itemNameAr: data[0].item_name_ar,
                   quantity: data[0].quantity,
                   unit: data[0].unit,
                   performedBy: data[0].performed_by,
@@ -860,7 +866,8 @@ const App: React.FC = () => {
                   status: 'completed',
                   fromLocation: log.type === 'usage' ? selectedLocation : 'External Supplier',
                   toLocation: log.type === 'usage' ? 'Consumed' : selectedLocation,
-                  itemName: language === 'ar' ? item.nameAr : item.nameEn,
+                  itemNameEn: item.nameEn,
+                  itemNameAr: item.nameAr,
                   quantity: log.quantity,
                   unit: item.unit,
                   performedBy: currentUser.name,
@@ -887,7 +894,8 @@ const App: React.FC = () => {
           status: 'completed',
           from_location: t.fromLocation,
           to_location: t.toLocation,
-          item_name: t.itemName,
+          item_name_en: t.itemNameEn,
+          item_name_ar: t.itemNameAr,
           quantity: t.quantity,
           unit: t.unit,
           performed_by: t.performedBy,
@@ -901,7 +909,7 @@ const App: React.FC = () => {
                   let updated = [...prev];
                   data.forEach((dbTx: any) => {
                       const index = updated.findIndex(t => 
-                          t.itemName === dbTx.item_name && 
+                          t.itemNameEn === dbTx.item_name_en && 
                           t.date === dbTx.date &&
                           t.id.length < 15
                       );

@@ -5,7 +5,8 @@ import { ArrowRightLeft, AlertCircle, Plus, Trash2, List, MapPin, Search, X } fr
 
 interface TransferItem {
     itemId: string;
-    itemName: string;
+    itemNameEn: string;
+    itemNameAr: string;
     quantity: number;
     unit: string;
 }
@@ -58,7 +59,8 @@ const TransferModal: React.FC<TransferModalProps> = ({
                     const item = items.find(i => i.id === di.itemId);
                     return {
                         itemId: di.itemId,
-                        itemName: item ? (language === 'ar' ? item.nameAr : item.nameEn) : 'Unknown',
+                        itemNameEn: item?.nameEn || 'Unknown',
+                        itemNameAr: item?.nameAr || 'غير معروف',
                         quantity: di.quantity,
                         unit: item?.unit || ''
                     };
@@ -86,11 +88,16 @@ const TransferModal: React.FC<TransferModalProps> = ({
         if (qty > item.quantity) { setError(`${t.insufficientStock} (Max: ${item.quantity})`); return; }
 
         const existing = transferList.find(i => i.itemId === selectedItemId);
-        const name = language === 'ar' ? item.nameAr : item.nameEn;
         if (existing) {
             setTransferList(prev => prev.map(i => i.itemId === selectedItemId ? { ...i, quantity: i.quantity + qty } : i));
         } else {
-            setTransferList(prev => [...prev, { itemId: item.id, itemName: name, quantity: qty, unit: item.unit }]);
+            setTransferList(prev => [...prev, { 
+                itemId: item.id, 
+                itemNameEn: item.nameEn, 
+                itemNameAr: item.nameAr, 
+                quantity: qty, 
+                unit: item.unit 
+            }]);
         }
         setSelectedItemId('');
         setQuantity('');
@@ -105,12 +112,13 @@ const TransferModal: React.FC<TransferModalProps> = ({
         for (const item of transferList) {
             const sourceItem = items.find(i => i.id === item.itemId);
             const maxQty = sourceItem?.quantity || 0;
+            const itemName = language === 'ar' ? item.itemNameAr : item.itemNameEn;
             if (item.quantity <= 0) {
-                setError(`${t.qtyGreaterZero} (${item.itemName})`);
+                setError(`${t.qtyGreaterZero} (${itemName})`);
                 return;
             }
             if (item.quantity > maxQty) {
-                setError(`${t.insufficientStock} (${item.itemName}: Max ${maxQty})`);
+                setError(`${t.insufficientStock} (${itemName}: Max ${maxQty})`);
                 return;
             }
         }
@@ -181,11 +189,12 @@ const TransferModal: React.FC<TransferModalProps> = ({
                                     {transferList.map(item => {
                                         const sourceItem = items.find(i => i.id === item.itemId);
                                         const maxQty = sourceItem?.quantity || item.quantity;
+                                        const itemName = language === 'ar' ? item.itemNameAr : item.itemNameEn;
                                         
                                         return (
                                             <div key={item.itemId} className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 gap-4">
                                                 <div className="overflow-hidden flex-1">
-                                                    <p className="font-bold text-xs sm:text-sm truncate text-gray-900 dark:text-white">{item.itemName}</p>
+                                                    <p className="font-bold text-xs sm:text-sm truncate text-gray-900 dark:text-white">{itemName}</p>
                                                     <p className="text-[10px] text-gray-400">{maxQty} {item.unit} {t.available || 'available'}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
