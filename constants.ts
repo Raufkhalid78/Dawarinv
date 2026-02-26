@@ -239,7 +239,13 @@ export const TRANSLATIONS = {
     tiles: "Tiles",
     list: "List",
     box: "Box",
-    rememberMe: "Keep me logged in for 30 days"
+    rememberMe: "Keep me logged in for 30 days",
+    selectAll: "Select All",
+    deselectAll: "Deselect All",
+    itemsSelected: "Items Selected",
+    bulkEdit: "Bulk Edit",
+    confirmDelete: "Are you sure you want to delete the selected items?",
+    available: "available"
   },
   ar: {
     title: "دوار السعادة",
@@ -439,6 +445,12 @@ export const TRANSLATIONS = {
     tiles: "مربعات",
     list: "قائمة",
     box: "صندوق",
-    rememberMe: "تذكرني لمدة 30 يوماً"
+    rememberMe: "تذكرني لمدة 30 يوماً",
+    selectAll: "تحديد الكل",
+    deselectAll: "إلغاء التحديد",
+    itemsSelected: "عناصر مختارة",
+    bulkEdit: "تعديل جماعي",
+    confirmDelete: "هل أنت متأكد من حذف العناصر المختارة؟",
+    available: "متاح"
   }
 };

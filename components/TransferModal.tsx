@@ -100,6 +100,21 @@ const TransferModal: React.FC<TransferModalProps> = ({
         e.preventDefault();
         if (transferList.length === 0) { setError(t.noItemsInList); return; }
         if (!targetLocation) { setError(t.selectLocation); return; }
+        
+        // Validate all items in list
+        for (const item of transferList) {
+            const sourceItem = items.find(i => i.id === item.itemId);
+            const maxQty = sourceItem?.quantity || 0;
+            if (item.quantity <= 0) {
+                setError(`${t.qtyGreaterZero} (${item.itemName})`);
+                return;
+            }
+            if (item.quantity > maxQty) {
+                setError(`${t.insufficientStock} (${item.itemName}: Max ${maxQty})`);
+                return;
+            }
+        }
+
         onTransfer(transferList.map(item => ({ itemId: item.itemId, quantity: item.quantity })), targetLocation, sourceLocation);
         onClose();
     };
@@ -163,17 +178,36 @@ const TransferModal: React.FC<TransferModalProps> = ({
                                 <div className="py-12 text-center text-gray-400 text-xs italic">{t.noItemsInList}</div>
                             ) : (
                                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {transferList.map(item => (
-                                        <div key={item.itemId} className="flex justify-between items-center p-3 bg-white dark:bg-gray-800">
-                                            <div className="overflow-hidden mr-2">
-                                                <p className="font-bold text-xs sm:text-sm truncate text-gray-900 dark:text-white">{item.itemName}</p>
-                                                <p className="text-[10px] text-gray-400">{item.quantity} {item.unit}</p>
+                                    {transferList.map(item => {
+                                        const sourceItem = items.find(i => i.id === item.itemId);
+                                        const maxQty = sourceItem?.quantity || item.quantity;
+                                        
+                                        return (
+                                            <div key={item.itemId} className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 gap-4">
+                                                <div className="overflow-hidden flex-1">
+                                                    <p className="font-bold text-xs sm:text-sm truncate text-gray-900 dark:text-white">{item.itemName}</p>
+                                                    <p className="text-[10px] text-gray-400">{maxQty} {item.unit} {t.available || 'available'}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="number" 
+                                                        value={item.quantity} 
+                                                        onChange={(e) => {
+                                                            const val = Number(e.target.value);
+                                                            if (val >= 0) {
+                                                                setTransferList(prev => prev.map(i => i.itemId === item.itemId ? { ...i, quantity: val } : i));
+                                                            }
+                                                        }}
+                                                        className={`w-20 px-2 py-1 border rounded-lg text-sm text-center outline-none focus:ring-2 focus:ring-brand-500 dark:bg-gray-700 dark:text-white ${item.quantity > maxQty ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'}`}
+                                                    />
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 w-8">{item.unit}</span>
+                                                </div>
+                                                <button onClick={() => setTransferList(prev => prev.filter(i => i.itemId !== item.itemId))} className="p-2 text-red-400 hover:text-red-600 transition-colors shrink-0">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
                                             </div>
-                                            <button onClick={() => setTransferList(prev => prev.filter(i => i.itemId !== item.itemId))} className="p-2 text-red-400 hover:text-red-600 transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

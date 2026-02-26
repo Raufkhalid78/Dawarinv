@@ -64,6 +64,24 @@ create table if not exists public.transactions (
   rejection_reason text
 );
 
+-- 5. Trigger to automatically create a location when a user is assigned to a new branch
+CREATE OR REPLACE FUNCTION public.handle_new_user_branch()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.branch_code IS NOT NULL THEN
+    INSERT INTO public.locations (id, name, type, icon)
+    VALUES (NEW.branch_code, COALESCE(NEW.branch_name, NEW.branch_code), 'branch', 'store')
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS on_user_branch_created ON public.app_users;
+CREATE TRIGGER on_user_branch_created
+  AFTER INSERT OR UPDATE OF branch_code, branch_name ON public.app_users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_branch();
+
 -- Seed Data: Locations
 INSERT INTO public.locations (id, name, description, icon, type) VALUES
 ('warehouse', 'Warehouse', 'Main storage facility for bulk items and raw materials.', 'warehouse', 'central'),

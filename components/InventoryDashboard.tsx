@@ -5,6 +5,7 @@ import SmartAssistant from './SmartAssistant';
 import TransferModal from './TransferModal';
 import AddItemModal from './AddItemModal';
 import UsageModal from './UsageModal';
+import BulkEditModal from './BulkEditModal';
 import { extractTextFromPDF, parseTransferDocument } from '../services/pdfService';
 import { exportTransferPDF } from '../services/exportService';
 import { 
@@ -52,6 +53,8 @@ interface InventoryDashboardProps {
   onAddItem: (locationId: string, item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => void;
   onEditItem: (locationId: string, item: InventoryItem) => void;
   onDeleteItem: (locationId: string, itemId: string) => void;
+  onBulkDeleteItems: (locationId: string, itemIds: string[]) => void;
+  onBulkEditItems: (locationId: string, itemIds: string[], updates: Partial<InventoryItem>) => void;
   onRecordUsage: (itemId: string, quantity: number, notes: string) => void;
   userRole: string;
   userBranchCode?: string;
@@ -74,6 +77,8 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   onAddItem,
   onEditItem,
   onDeleteItem,
+  onBulkDeleteItems,
+  onBulkEditItems,
   onRecordUsage,
   userRole,
   userBranchCode,
@@ -91,10 +96,12 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [sortBy, setSortBy] = useState<'name' | 'quantity' | 'lastUpdated'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
@@ -104,7 +111,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
   // Grouped Notifications State
   const [selectedTransferGroup, setSelectedTransferGroup] = useState<string | null>(null);
-  const [rejectionTarget, setRejectionTarget] = useState<Transaction | null>(null);
+  const [rejectionTarget, setRejectionTarget] = useState<Transaction[] | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -188,9 +195,23 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     return Object.entries(groups).sort((a,b) => new Date(b[1][0].date).getTime() - new Date(a[1][0].date).getTime());
 }, [outgoingTransfers]);
 
+  const groupedApprovals = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {};
+    outgoingApprovals.forEach(tx => {
+        const gid = tx.transferGroupId || `UNGROUPED-${tx.date}`;
+        if (!groups[gid]) groups[gid] = [];
+        groups[gid].push(tx);
+    });
+    return Object.entries(groups).sort((a,b) => new Date(b[1][0].date).getTime() - new Date(a[1][0].date).getTime());
+  }, [outgoingApprovals]);
+
   const handleReject = () => {
       if (rejectionTarget && rejectionReason.trim()) {
-          onRejectTransfer(rejectionTarget, rejectionReason);
+          if (Array.isArray(rejectionTarget)) {
+              rejectionTarget.forEach(tx => onRejectTransfer(tx, rejectionReason));
+          } else {
+              onRejectTransfer(rejectionTarget, rejectionReason);
+          }
           setRejectionTarget(null);
           setRejectionReason('');
       }
@@ -208,6 +229,60 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     if (group) {
       exportTransferPDF(group[1], language);
     }
+  };
+
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItemIds.size === filteredItems.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(filteredItems.map(i => i.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (window.confirm(t.confirmDelete)) {
+      onBulkDeleteItems(locationId, Array.from(selectedItemIds));
+      setSelectedItemIds(new Set());
+    }
+  };
+
+  const handleBulkTransfer = () => {
+    const selectedItemsData = Array.from(selectedItemIds).map(id => {
+      return {
+        itemId: id,
+        quantity: 0
+      };
+    });
+    
+    setPdfTransferData({
+      targetLocationId: null,
+      items: selectedItemsData
+    });
+    setIsTransferModalOpen(true);
+  };
+
+  const handleBulkEdit = () => {
+    setIsBulkEditModalOpen(true);
+  };
+
+  const handleBulkEditSave = (updates: Partial<InventoryItem>) => {
+    onBulkEditItems(locationId, Array.from(selectedItemIds), updates);
+    setSelectedItemIds(new Set());
+  };
+
+  const handleTransferSubmit = (transferItems: { itemId: string, quantity: number }[], toLocation: LocationId, sourceOverride?: LocationId) => {
+    onTransfer(transferItems, toLocation, sourceOverride);
+    setSelectedItemIds(new Set());
+    setPdfTransferData(null);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,7 +373,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                  <button onClick={() => handleBulkAccept(groupId)} className="flex-1 min-w-[100px] flex items-center justify-center gap-2 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors">
                                     <CheckCircle className="w-3 h-3" /> {t.accept}
                                  </button>
-                                 <button onClick={() => setRejectionTarget(items[0])} className="flex items-center justify-center p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title={t.reject}>
+                                 <button onClick={() => setRejectionTarget(items)} className="flex items-center justify-center p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title={t.reject}>
                                     <XCircle className="w-5 h-5" />
                                  </button>
                               </div>
@@ -314,19 +389,34 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                         <ArrowUpCircle className="w-4 h-4 text-orange-500" /> {t.outgoingApprovals}
                      </h3>
                      <div className="space-y-3">
-                        {outgoingApprovals.map((tx) => (
-                           <div key={tx.id} className="bg-white dark:bg-gray-800 rounded-xl border border-orange-100 dark:border-orange-900/30 p-4 sm:p-5 shadow-sm flex justify-between items-center">
-                              <div>
-                                 <p className="text-xs text-gray-400 mb-1">{t.to}: <span className="text-gray-900 dark:text-white font-bold">{tx.toLocation}</span></p>
-                                 <p className="text-sm font-semibold text-gray-900 dark:text-white">{tx.itemName}</p>
-                                 <p className="text-xs text-gray-500">{tx.quantity} {tx.unit}</p>
+                        {groupedApprovals.map(([groupId, items]) => (
+                           <div key={groupId} className="bg-white dark:bg-gray-800 rounded-xl border border-orange-100 dark:border-orange-900/30 p-4 sm:p-5 shadow-sm">
+                              <div className="flex justify-between items-start mb-4">
+                                 <div>
+                                    <p className="text-xs text-gray-400 mb-1">{t.to}: <span className="text-gray-900 dark:text-white font-bold">{items[0].toLocation}</span></p>
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{items.length} {t.items} • {items.reduce((acc, curr) => acc + curr.quantity, 0)} {items[0].unit}</p>
+                                 </div>
+                                 <button onClick={() => handleDownloadTransfer(groupId, 'outgoing')} className="p-2 text-gray-400 hover:text-orange-600 transition-colors">
+                                    <Download className="w-5 h-5" />
+                                 </button>
                               </div>
-                              <button onClick={() => onConfirmOutbound(tx)} className="flex items-center gap-2 px-3 py-2 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors">
-                                 {t.confirmOutbound}
-                              </button>
+                              <div className="flex gap-2">
+                                 <button 
+                                    onClick={() => setSelectedTransferGroup(groupId)} 
+                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors"
+                                 >
+                                    <Eye className="w-3 h-3" /> {t.viewItems}
+                                 </button>
+                                 <button 
+                                    onClick={() => items.forEach(tx => onConfirmOutbound(tx))} 
+                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 transition-colors"
+                                 >
+                                    <CheckCircle className="w-3 h-3" /> {t.confirmOutbound}
+                                 </button>
+                              </div>
                            </div>
                         ))}
-                        {outgoingApprovals.length === 0 && <p className="text-sm text-gray-400 italic">{t.noTransactionsFound}</p>}
+                        {groupedApprovals.length === 0 && <p className="text-sm text-gray-400 italic">{t.noTransactionsFound}</p>}
                      </div>
                   </div>
                </div>
@@ -409,6 +499,18 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                     <button onClick={() => setStockStatusFilter('inStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'inStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.inStock}</button>
                 </div>
               </div>
+
+              {!isGlobalView && (
+                <button 
+                  onClick={toggleSelectAll}
+                  className={`h-full px-4 border rounded-xl shadow-sm flex items-center gap-2 transition-colors ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50'}`}
+                >
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-white border-white' : 'border-gray-300 dark:border-gray-600'}`}>
+                    {selectedItemIds.size === filteredItems.length && filteredItems.length > 0 && <div className="w-2 h-2 bg-brand-600 rounded-sm"></div>}
+                  </div>
+                  <span className="hidden sm:inline">{selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? t.deselectAll : t.selectAll}</span>
+                </button>
+              )}
             </div>
             
             {/* Actions */}
@@ -453,11 +555,21 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           }>
             {filteredItems.map(item => {
               const isLowStock = item.quantity <= item.minThreshold;
+              const isSelected = selectedItemIds.has(item.id);
 
               // --- COMPACT BOX VIEW ---
               if (viewMode === 'compact') {
                   return (
-                    <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all relative flex flex-col items-center text-center">
+                    <div 
+                      key={item.id} 
+                      onClick={() => !isGlobalView && toggleItemSelection(item.id)}
+                      className={`bg-white dark:bg-gray-800 rounded-xl p-3 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all relative flex flex-col items-center text-center cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                    >
+                        {isSelected && (
+                          <div className="absolute top-2 left-2 z-10">
+                            <CheckCircle className="w-4 h-4 text-brand-600 fill-white" />
+                          </div>
+                        )}
                         {isLowStock && <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>}
                         <div className={`p-2 rounded-full mb-2 ${isLowStock ? 'bg-red-50 dark:bg-red-900/20 text-red-600' : 'bg-brand-50 dark:bg-brand-900/20 text-brand-600'}`}>
                            <Package className="w-5 h-5" />
@@ -466,7 +578,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                         <p className={`text-lg font-bold mb-2 ${isLowStock ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>{item.quantity} <span className="text-[10px] text-gray-500">{item.unit}</span></p>
                         
                         {!isGlobalView && (
-                             <div className="flex gap-1 w-full mt-auto">
+                             <div className="flex gap-1 w-full mt-auto" onClick={e => e.stopPropagation()}>
                                 {(userRole !== 'branch_manager' || userBranchCode === locationId) ? (
                                     <>
                                        <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Pencil className="w-3 h-3 mx-auto" /></button>
@@ -484,12 +596,21 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               // --- LIST VIEW ---
               if (viewMode === 'list') {
                   return (
-                      <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-700 shadow-sm flex items-center gap-4">
+                      <div 
+                        key={item.id} 
+                        onClick={() => !isGlobalView && toggleItemSelection(item.id)}
+                        className={`bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm flex items-center gap-4 cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      >
+                          {!isGlobalView && (
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-brand-600 border-brand-600' : 'border-gray-300 dark:border-gray-600'}`}>
+                              {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+                          )}
                           <div className={`p-3 rounded-lg hidden sm:block ${isLowStock ? 'bg-red-50 dark:bg-red-900/20 text-red-600' : 'bg-brand-50 dark:bg-brand-900/20 text-brand-600'}`}>
                               <Package className="w-6 h-6" />
                           </div>
                           
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-0">
                               <div className="flex items-center gap-2 mb-1">
                                   <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">{language === 'ar' ? item.nameAr : item.nameEn}</h3>
                                   {isLowStock && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 uppercase">{t.lowStock}</span>}
@@ -507,7 +628,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           </div>
 
                           {!isGlobalView && (
-                             <div className="relative">
+                             <div className="relative" onClick={e => e.stopPropagation()}>
                                 <button onClick={(e) => { e.stopPropagation(); setActiveActionId(activeActionId === item.id ? null : item.id); }} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
                                    <MoreVertical className="w-5 h-5" />
                                 </button>
@@ -532,7 +653,16 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
               // --- GRID VIEW (DEFAULT) ---
               return (
-                <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all group relative">
+                <div 
+                  key={item.id} 
+                  onClick={() => !isGlobalView && toggleItemSelection(item.id)}
+                  className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all group relative cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                >
+                  {!isGlobalView && (
+                    <div className={`absolute top-4 left-4 z-10 w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-brand-600 border-brand-600 scale-110' : 'bg-white/80 dark:bg-gray-800/80 border-gray-300 dark:border-gray-600 opacity-0 group-hover:opacity-100'}`}>
+                      {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                    </div>
+                  )}
                   
                   {isLowStock && (
                     <div className="absolute top-4 right-4 rtl:right-auto rtl:left-4 z-10">
@@ -549,7 +679,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                     </div>
                     
                     {!isGlobalView && (
-                        <div className="relative">
+                        <div className="relative" onClick={e => e.stopPropagation()}>
                           <button onClick={(e) => { e.stopPropagation(); setActiveActionId(activeActionId === item.id ? null : item.id); }} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
                              <MoreVertical className="w-5 h-5" />
                           </button>
@@ -619,6 +749,54 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         </main>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedItemIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-10 duration-300">
+          <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 border border-gray-700">
+            <div className="flex items-center gap-3 border-r border-gray-700 pr-6">
+              <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center font-bold">
+                {selectedItemIds.size}
+              </div>
+              <span className="text-sm font-bold">{t.itemsSelected || 'Items Selected'}</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleBulkEdit}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-800 rounded-xl transition-colors text-sm font-bold"
+              >
+                <Pencil className="w-4 h-4 text-brand-400" />
+                {t.edit}
+              </button>
+
+              <button 
+                onClick={handleBulkTransfer}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-800 rounded-xl transition-colors text-sm font-bold"
+              >
+                <ArrowRightLeft className="w-4 h-4 text-blue-400" />
+                {t.transfer}
+              </button>
+              
+              <button 
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-red-900/30 text-red-400 rounded-xl transition-colors text-sm font-bold"
+              >
+                <Trash2 className="w-4 h-4" />
+                {t.delete}
+              </button>
+              
+              <button 
+                onClick={() => setSelectedItemIds(new Set())}
+                className="p-2 hover:bg-gray-800 rounded-xl transition-colors"
+                title={t.cancel}
+              >
+                <XCircle className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SmartAssistant 
         locationName={locationName}
         items={inventory}
@@ -632,7 +810,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         onClose={() => { setIsTransferModalOpen(false); setPdfTransferData(null); }}
         currentLocation={locationId}
         items={inventory}
-        onTransfer={onTransfer}
+        onTransfer={handleTransferSubmit}
         language={language}
         availableLocations={availableLocations}
         initialData={pdfTransferData}
@@ -651,6 +829,14 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         language={language}
         initialData={itemToEdit}
         existingItems={inventory}
+      />
+
+      <BulkEditModal 
+        isOpen={isBulkEditModalOpen}
+        onClose={() => setIsBulkEditModalOpen(false)}
+        selectedCount={selectedItemIds.size}
+        onSave={handleBulkEditSave}
+        language={language}
       />
 
       <UsageModal
@@ -692,15 +878,60 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                       </button>
                   </div>
                   <div className="space-y-3">
-                      {(groupedIncoming.find(g => g[0] === selectedTransferGroup)?.[1] || []).map(tx => (
-                          <div key={tx.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                              <span className="font-medium text-gray-900 dark:text-white">{tx.itemName}</span>
-                              <span className="font-bold text-brand-600 dark:text-brand-400">{tx.quantity} {tx.unit}</span>
-                          </div>
-                      ))}
+                      {(() => {
+                          const group = [...groupedIncoming, ...groupedApprovals, ...groupedOutgoing].find(g => g[0] === selectedTransferGroup);
+                          return (group?.[1] || []).map(tx => (
+                              <div key={tx.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                  <span className="font-medium text-gray-900 dark:text-white">{tx.itemName}</span>
+                                  <span className="font-bold text-brand-600 dark:text-brand-400">{tx.quantity} {tx.unit}</span>
+                              </div>
+                          ));
+                      })()}
                   </div>
                   <div className="mt-6 flex gap-3">
-                      <button onClick={() => handleBulkAccept(selectedTransferGroup)} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors">{t.accept}</button>
+                      {groupedIncoming.some(g => g[0] === selectedTransferGroup) && (
+                          <>
+                              <button 
+                                onClick={() => {
+                                    const group = groupedIncoming.find(g => g[0] === selectedTransferGroup);
+                                    if (group) setRejectionTarget(group[1]);
+                                    setSelectedTransferGroup(null);
+                                }} 
+                                className="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-colors"
+                              >
+                                {t.reject}
+                              </button>
+                              <button 
+                                onClick={() => {
+                                    handleBulkAccept(selectedTransferGroup);
+                                    setSelectedTransferGroup(null);
+                                }} 
+                                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors"
+                              >
+                                {t.accept}
+                              </button>
+                          </>
+                      )}
+                      {groupedApprovals.some(g => g[0] === selectedTransferGroup) && (
+                          <button 
+                            onClick={() => {
+                                const group = groupedApprovals.find(g => g[0] === selectedTransferGroup);
+                                if (group) group[1].forEach(tx => onConfirmOutbound(tx));
+                                setSelectedTransferGroup(null);
+                            }} 
+                            className="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-colors"
+                          >
+                            {t.confirmOutbound}
+                          </button>
+                      )}
+                      {!groupedIncoming.some(g => g[0] === selectedTransferGroup) && !groupedApprovals.some(g => g[0] === selectedTransferGroup) && (
+                          <button 
+                            onClick={() => setSelectedTransferGroup(null)} 
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                          >
+                            {t.cancel}
+                          </button>
+                      )}
                   </div>
               </div>
           </div>

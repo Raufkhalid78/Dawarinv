@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [inventory, setInventory] = useState<Record<string, InventoryItem[]>>({});
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [locations, setLocations] = useState<LocationData[]>(STATIC_LOCATIONS);
   const [loading, setLoading] = useState(true);
   
   // Session State - Lazy initialization to prevent flicker
@@ -91,9 +92,22 @@ const App: React.FC = () => {
     setLoading(true);
     let loadedUsers = INITIAL_USERS;
     let loadedInventory = INITIAL_INVENTORY;
+    let loadedLocations = STATIC_LOCATIONS;
     let loadedTransactions: Transaction[] = [];
 
     try {
+        // Fetch Locations
+        const { data: locData, error: locError } = await supabase.from('locations').select('*');
+        if (!locError && locData) {
+            loadedLocations = locData.map((l: any) => ({
+                id: l.id,
+                name: l.name,
+                description: l.description || '',
+                icon: l.icon || 'store',
+                type: l.type as 'central' | 'branch'
+            }));
+        }
+
         // Fetch Users
         const { data: usersData, error: usersError } = await supabase.from('app_users').select('*');
         if (!usersError && usersData && usersData.length > 0) {
@@ -160,6 +174,7 @@ const App: React.FC = () => {
     } finally {
         setUsers(loadedUsers);
         setInventory(loadedInventory);
+        setLocations(loadedLocations);
         setTransactions(loadedTransactions);
         setLoading(false);
     }
@@ -167,6 +182,26 @@ const App: React.FC = () => {
 
   useEffect(() => {
       fetchData();
+
+      // Set up real-time subscriptions
+      const txSubscription = supabase
+        .channel('transactions-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+          fetchData();
+        })
+        .subscribe();
+
+      const invSubscription = supabase
+        .channel('inventory-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, () => {
+          fetchData();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(txSubscription);
+        supabase.removeChannel(invSubscription);
+      };
   }, []);
 
   // Request Notification Permission
@@ -207,36 +242,21 @@ const App: React.FC = () => {
     }
   }, [transactions, currentUser, selectedLocation, language]);
 
-  // Dynamically calculate available locations
+  // Dynamically calculate available locations based on state and permissions
   const availableLocations = useMemo<LocationData[]>(() => {
-      let dynamicBranches: LocationData[] = users
-          .filter(u => u.role === 'branch_manager' && u.branchCode)
-          .map(u => ({
-              id: u.branchCode!,
-              name: u.branchName || u.branchCode!,
-              description: 'Branch Inventory',
-              icon: 'store',
-              type: 'branch'
-          }));
-      
-      const uniqueIds = new Set(STATIC_LOCATIONS.map(l => l.id));
-      const newBranches = dynamicBranches.filter(b => !uniqueIds.has(b.id));
-      const allLocations = [...STATIC_LOCATIONS, ...newBranches];
-
       // Filter based on user permissions
       if (currentUser) {
           if (currentUser.role === 'branch_manager') {
               const accessible = new Set(currentUser.accessibleBranches || []);
               accessible.add(currentUser.branchCode!);
-              return allLocations.filter(loc => accessible.has(loc.id));
+              return locations.filter(loc => accessible.has(loc.id));
           }
           if (currentUser.role === 'mammal_employee') {
-              return allLocations.filter(loc => loc.id === 'mammal');
+              return locations.filter(loc => loc.id === 'mammal');
           }
       }
-
-      return allLocations;
-  }, [users, currentUser]);
+      return locations;
+  }, [locations, currentUser]);
 
   const toggleLanguage = () => {
     setLanguage(prev => {
@@ -292,6 +312,20 @@ const App: React.FC = () => {
     const user: User = { ...newUser, id: tempId };
     setUsers(prev => [...prev, user]);
 
+    if (newUser.role === 'branch_manager' && newUser.branchCode) {
+        const newLoc: LocationData = {
+            id: newUser.branchCode,
+            name: newUser.branchName || newUser.branchCode,
+            description: 'Branch Inventory',
+            icon: 'store',
+            type: 'branch'
+        };
+        setLocations(prev => {
+            if (prev.some(l => l.id === newLoc.id)) return prev;
+            return [...prev, newLoc];
+        });
+    }
+
     // Async Backend Call
     const { data, error } = await supabase.from('app_users').insert([{
         username: newUser.username,
@@ -321,6 +355,23 @@ const App: React.FC = () => {
   const handleEditUser = async (updatedUser: User) => {
       // Optimistic Update
       setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+
+      if (updatedUser.role === 'branch_manager' && updatedUser.branchCode) {
+          const newLoc: LocationData = {
+              id: updatedUser.branchCode,
+              name: updatedUser.branchName || updatedUser.branchCode,
+              description: 'Branch Inventory',
+              icon: 'store',
+              type: 'branch'
+          };
+          setLocations(prev => {
+              const exists = prev.some(l => l.id === newLoc.id);
+              if (exists) {
+                  return prev.map(l => l.id === newLoc.id ? { ...l, name: newLoc.name } : l);
+              }
+              return [...prev, newLoc];
+          });
+      }
 
       const updates: any = {
         username: updatedUser.username,
@@ -444,6 +495,31 @@ const App: React.FC = () => {
      }));
 
      await supabase.from('inventory_items').delete().eq('id', itemId);
+  };
+
+  const handleBulkDeleteItems = async (locationId: string, itemIds: string[]) => {
+      // Optimistic Update
+      setInventory(prev => ({
+          ...prev,
+          [locationId]: (prev[locationId] || []).filter(i => !itemIds.includes(i.id))
+      }));
+
+      await supabase.from('inventory_items').delete().in('id', itemIds);
+  };
+
+  const handleBulkEditItems = async (locationId: string, itemIds: string[], updates: Partial<InventoryItem>) => {
+      // Optimistic Update
+      setInventory(prev => ({
+          ...prev,
+          [locationId]: (prev[locationId] || []).map(i => itemIds.includes(i.id) ? { ...i, ...updates } : i)
+      }));
+
+      const dbUpdates: any = {};
+      if (updates.category) dbUpdates.category = updates.category;
+      if (updates.unit) dbUpdates.unit = updates.unit;
+      if (updates.minThreshold !== undefined) dbUpdates.min_threshold = updates.minThreshold;
+
+      await supabase.from('inventory_items').update(dbUpdates).in('id', itemIds);
   };
 
   const handleTransfer = async (items: { itemId: string, quantity: number }[], toLocation: LocationId, sourceOverride?: LocationId) => {
@@ -909,6 +985,21 @@ const App: React.FC = () => {
     ? Object.entries(inventory).flatMap(([locId, items]) => (items as InventoryItem[]).map(i => ({ ...i, locationId: locId })))
     : inventory[selectedLocation] || [];
 
+  const incomingTransfers = transactions.filter(t => 
+    (selectedLocation === 'all' ? true : t.toLocation === selectedLocation) && 
+    t.status === 'pending_target'
+  );
+
+  const outgoingTransfers = transactions.filter(t => 
+    (selectedLocation === 'all' ? true : t.fromLocation === selectedLocation) && 
+    (t.status === 'pending_target' || t.status === 'pending_source')
+  );
+
+  const outgoingApprovals = transactions.filter(t => 
+    (selectedLocation === 'all' ? true : t.fromLocation === selectedLocation) && 
+    t.status === 'pending_source'
+  );
+
   return (
     <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
       <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
@@ -922,12 +1013,14 @@ const App: React.FC = () => {
         onAddItem={handleAddItem}
         onEditItem={handleEditItem}
         onDeleteItem={handleDeleteItem}
+        onBulkDeleteItems={handleBulkDeleteItems}
+        onBulkEditItems={handleBulkEditItems}
         onRecordUsage={(itemId, qty, notes) => handleDailyLog('usage', itemId, qty, notes)}
         userRole={currentUser.role}
         userBranchCode={currentUser.branchCode}
-        incomingTransfers={transactions.filter(t => t.toLocation === selectedLocation && t.status === 'pending_target')}
-        outgoingTransfers={transactions.filter(t => t.fromLocation === selectedLocation && (t.status === 'pending_target' || t.status === 'pending_source'))}
-        outgoingApprovals={transactions.filter(t => t.fromLocation === selectedLocation && t.status === 'pending_source')}
+        incomingTransfers={incomingTransfers}
+        outgoingTransfers={outgoingTransfers}
+        outgoingApprovals={outgoingApprovals}
         onReceiveTransfer={handleReceiveTransfer}
         onRejectTransfer={handleRejectTransfer}
         onConfirmOutbound={handleConfirmSourceTransfer}
