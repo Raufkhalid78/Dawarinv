@@ -217,10 +217,10 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       }
   };
 
-  const handleBulkAccept = (groupId: string) => {
+  const handleBulkAccept = async (groupId: string) => {
       const group = groupedIncoming.find(g => g[0] === groupId);
       if (group) {
-          group[1].forEach(tx => onReceiveTransfer(tx));
+          await Promise.all(group[1].map(tx => onReceiveTransfer(tx)));
       }
   };
 
@@ -309,15 +309,15 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
       <div className={`flex-1 flex flex-col transition-all duration-300 ${isAssistantOpen ? 'lg:mr-96 lg:rtl:mr-0 lg:rtl:ml-96' : ''}`}>
         
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20 transition-colors">
-          <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
+          <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <button onClick={onBack} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 transition-colors flex-shrink-0">
                 <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
               </button>
-              <div className="overflow-hidden">
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 truncate">
-                  {locationName} 
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="truncate">{locationName}</span>
+                  <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                     <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tighter">Live</span>
                   </div>

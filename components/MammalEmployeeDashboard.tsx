@@ -151,19 +151,19 @@ const MammalEmployeeDashboard: React.FC<MammalEmployeeDashboardProps> = ({
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors font-sans pb-24">
             {/* Header */}
             <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
-                <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-2 bg-brand-600 rounded-lg text-white">
+                <div className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="p-2 bg-brand-600 rounded-lg text-white flex-shrink-0">
                             <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-arabic leading-tight">
+                        <div className="min-w-0">
+                            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-arabic leading-tight truncate">
                                 {t.logSheet}
                             </h1>
                             <div className="flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                                 <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tighter">Live</span>
-                                <span className="text-[10px] text-gray-400 ml-1">• {t.mammal}</span>
+                                <span className="text-[10px] text-gray-400 ml-1 truncate">• {t.mammal}</span>
                             </div>
                         </div>
                     </div>

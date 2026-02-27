@@ -88,8 +88,8 @@ const App: React.FC = () => {
   }, [theme]);
 
   // Initial Data Fetch from Supabase with Fallback
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     let loadedUsers = INITIAL_USERS;
     let loadedInventory = INITIAL_INVENTORY;
     let loadedLocations = STATIC_LOCATIONS;
@@ -184,12 +184,19 @@ const App: React.FC = () => {
   useEffect(() => {
       fetchData();
 
+      // Debounce fetchData to avoid multiple rapid calls from real-time updates
+      let debounceTimer: any;
+      const debouncedFetch = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchData(true), 500);
+      };
+
       // Set up real-time subscriptions
       const txSubscription = supabase
         .channel('transactions-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
           console.log('Real-time transaction update:', payload);
-          fetchData();
+          debouncedFetch();
         })
         .subscribe((status) => {
           console.log('Transactions subscription status:', status);
@@ -199,13 +206,14 @@ const App: React.FC = () => {
         .channel('inventory-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, (payload) => {
           console.log('Real-time inventory update:', payload);
-          fetchData();
+          debouncedFetch();
         })
         .subscribe((status) => {
           console.log('Inventory subscription status:', status);
         });
 
       return () => {
+        clearTimeout(debounceTimer);
         supabase.removeChannel(txSubscription);
         supabase.removeChannel(invSubscription);
       };
@@ -595,55 +603,63 @@ const App: React.FC = () => {
 
     // Backend Calls
     if (newTransactions.length > 0) {
-        // Sync Inventory updates if manager
-        if (isManagerOfSource) {
-            for (const item of items) {
-                 const sourceItem = (inventory[fromLocation] || []).find(i => i.id === item.itemId);
-                 if (sourceItem) {
-                     await supabase.from('inventory_items').update({
-                        quantity: sourceItem.quantity - item.quantity
-                     }).eq('id', item.itemId);
-                 }
-            }
-        }
-        
-        // Save Transactions
-        const dbTransactions = newTransactions.map(t => ({
-            transfer_group_id: t.transferGroupId,
-            date: t.date,
-            type: 'transfer',
-            status: t.status,
-            from_location: t.fromLocation,
-            to_location: t.toLocation,
-            item_name_en: t.itemNameEn,
-            item_name_ar: t.itemNameAr,
-            quantity: t.quantity,
-            unit: t.unit,
-            performed_by: t.performedBy
-        }));
-        
-        const { data, error } = await supabase.from('transactions').insert(dbTransactions).select();
-        
-        if (!error && data) {
-            // Map real IDs back to transactions
-            setTransactions(prev => {
-                let updated = [...prev];
-                data.forEach((dbTx: any) => {
-                    // Match by group and item name (best we can do since we don't have temp IDs in DB)
-                    const index = updated.findIndex(t => 
-                        t.transferGroupId === dbTx.transfer_group_id && 
-                        t.itemNameEn === dbTx.item_name_en &&
-                        t.id.length < 15 // Check if it's a temp ID (random string vs UUID)
-                    );
-                    if (index !== -1) {
-                        updated[index] = {
-                            ...updated[index],
-                            id: dbTx.id
-                        };
+        try {
+            // Sync Inventory updates if manager - Parallelized
+            if (isManagerOfSource) {
+                const inventoryUpdates = items.map(async (item) => {
+                    const sourceItem = (inventory[fromLocation] || []).find(i => i.id === item.itemId);
+                    if (sourceItem) {
+                        return supabase.from('inventory_items').update({
+                            quantity: sourceItem.quantity - item.quantity
+                        }).eq('id', item.itemId);
                     }
+                    return Promise.resolve();
                 });
-                return updated;
-            });
+                await Promise.all(inventoryUpdates);
+            }
+            
+            // Save Transactions
+            const dbTransactions = newTransactions.map(t => ({
+                transfer_group_id: t.transferGroupId,
+                date: t.date,
+                type: 'transfer',
+                status: t.status,
+                from_location: t.fromLocation,
+                to_location: t.toLocation,
+                item_name_en: t.itemNameEn,
+                item_name_ar: t.itemNameAr,
+                quantity: t.quantity,
+                unit: t.unit,
+                performed_by: t.performedBy
+            }));
+            
+            const { data, error } = await supabase.from('transactions').insert(dbTransactions).select();
+            
+            if (!error && data) {
+                // Map real IDs back to transactions
+                setTransactions(prev => {
+                    let updated = [...prev];
+                    data.forEach((dbTx: any) => {
+                        const index = updated.findIndex(t => 
+                            t.transferGroupId === dbTx.transfer_group_id && 
+                            t.itemNameEn === dbTx.item_name_en &&
+                            t.id.length < 15
+                        );
+                        if (index !== -1) {
+                            updated[index] = {
+                                ...updated[index],
+                                id: dbTx.id
+                            };
+                        }
+                    });
+                    return updated;
+                });
+            }
+        } catch (err) {
+            console.error("Transfer failed", err);
+            // Rollback optimistic update if needed, but for now just log
+            alert("Transfer failed. Please check your connection.");
+            fetchData(true); // Sync back with server
         }
     }
   };
@@ -665,13 +681,15 @@ const App: React.FC = () => {
 
       setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'pending_target' } : t));
 
-      // Backend
+      // Backend - Parallelized
+      const promises: any[] = [];
       if (sourceItem) {
-          await supabase.from('inventory_items').update({
+          promises.push(supabase.from('inventory_items').update({
               quantity: sourceItem.quantity - transaction.quantity
-          }).eq('id', sourceItem.id);
+          }).eq('id', sourceItem.id));
       }
-      await supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id);
+      promises.push(supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id));
+      await Promise.all(promises);
   };
 
   const handleReceiveTransfer = async (transaction: Transaction) => {
@@ -709,13 +727,14 @@ const App: React.FC = () => {
 
       setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'completed' } : t));
 
-      // Backend
+      // Backend - Parallelized
+      const promises: any[] = [];
       if (destItem) {
-          await supabase.from('inventory_items').update({
+          promises.push(supabase.from('inventory_items').update({
               quantity: destItem.quantity + transaction.quantity
-          }).eq('id', destItem.id);
+          }).eq('id', destItem.id));
       } else {
-          await supabase.from('inventory_items').insert([{
+          promises.push(supabase.from('inventory_items').insert([{
               location_id: targetLocation,
               name_en: transaction.itemNameEn,
               name_ar: transaction.itemNameAr,
@@ -723,9 +742,10 @@ const App: React.FC = () => {
               quantity: transaction.quantity,
               unit: transaction.unit,
               min_threshold: 0
-          }]);
+          }]));
       }
-      await supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id);
+      promises.push(supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id));
+      await Promise.all(promises);
   };
 
   const handleRejectTransfer = async (transaction: Transaction, reason: string) => {
@@ -766,14 +786,15 @@ const App: React.FC = () => {
 
       setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'rejected', rejectionReason: reason } : t));
 
-      // Backend
+      // Backend - Parallelized
+      const promises: any[] = [];
       if (wasDeducted) {
           if (sourceItem) {
-               await supabase.from('inventory_items').update({
+               promises.push(supabase.from('inventory_items').update({
                   quantity: sourceItem.quantity + transaction.quantity
-              }).eq('id', sourceItem.id);
+              }).eq('id', sourceItem.id));
           } else {
-              await supabase.from('inventory_items').insert([{
+              promises.push(supabase.from('inventory_items').insert([{
                   location_id: sourceLocation,
                   name_en: transaction.itemNameEn,
                   name_ar: transaction.itemNameAr,
@@ -781,14 +802,11 @@ const App: React.FC = () => {
                   quantity: transaction.quantity,
                   unit: transaction.unit,
                   min_threshold: 0
-              }]);
+              }]));
           }
       }
-  
-      await supabase.from('transactions').update({
-          status: 'rejected',
-          rejection_reason: reason
-      }).eq('id', transaction.id);
+      promises.push(supabase.from('transactions').update({ status: 'rejected', rejection_reason: reason }).eq('id', transaction.id));
+      await Promise.all(promises);
   };
 
   const handleDailyLog = async (type: TransactionType, itemId: string, quantity: number, notes: string) => {
@@ -823,41 +841,23 @@ const App: React.FC = () => {
           
           setTransactions(prev => [newTx, ...prev]);
 
-          // Backend
-          await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', itemId);
-          const { data, error } = await supabase.from('transactions').insert([{
-              date: newTx.date,
-              type: type,
-              status: 'completed',
-              from_location: newTx.fromLocation,
-              to_location: newTx.toLocation,
-              item_name_en: newTx.itemNameEn,
-              item_name_ar: newTx.itemNameAr,
-              quantity: quantity,
-              unit: item.unit,
-              performed_by: currentUser.name,
-              notes: notes
-          }]).select();
-
-          if (!error && data && data[0]) {
-              const realTx: Transaction = {
-                  id: data[0].id,
-                  transferGroupId: data[0].transfer_group_id,
-                  date: data[0].date,
-                  type: data[0].type as any,
-                  status: data[0].status as any,
-                  fromLocation: data[0].from_location,
-                  toLocation: data[0].to_location,
-                  itemNameEn: data[0].item_name_en,
-                  itemNameAr: data[0].item_name_ar,
-                  quantity: data[0].quantity,
-                  unit: data[0].unit,
-                  performedBy: data[0].performed_by,
-                  notes: data[0].notes,
-                  rejectionReason: data[0].rejection_reason
-              };
-              setTransactions(prev => prev.map(t => t.id === tempId ? realTx : t));
-          }
+          // Backend - Parallelized
+          await Promise.all([
+              supabase.from('inventory_items').update({ quantity: newQty }).eq('id', itemId) as any,
+              supabase.from('transactions').insert([{
+                  date: newTx.date,
+                  type: type,
+                  status: 'completed',
+                  from_location: newTx.fromLocation,
+                  to_location: newTx.toLocation,
+                  item_name_en: newTx.itemNameEn,
+                  item_name_ar: newTx.itemNameAr,
+                  quantity: quantity,
+                  unit: item.unit,
+                  performed_by: currentUser.name,
+                  notes: notes
+              }]) as any
+          ]);
       }
   };
 
@@ -895,14 +895,15 @@ const App: React.FC = () => {
       setInventory(prev => ({ ...prev, [selectedLocation]: updatedLocationInventory }));
       setTransactions(prev => [...newTransactions, ...prev]);
       
-      // Backend
-      for (const log of logs) {
+      // Backend - Parallelized
+      const inventoryPromises = logs.map(async (log) => {
           const item = (inventory[selectedLocation] || []).find(i => i.id === log.itemId);
           if (item) {
                const newQty = log.type === 'usage' ? item.quantity - log.quantity : item.quantity + log.quantity;
-               await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', log.itemId);
+               return supabase.from('inventory_items').update({ quantity: newQty }).eq('id', log.itemId);
           }
-      }
+          return Promise.resolve();
+      });
       
       const dbTxs = newTransactions.map(t => ({
           date: t.date,
@@ -918,25 +919,12 @@ const App: React.FC = () => {
           notes: t.notes
       }));
       
+      const promises: Promise<any>[] = [...inventoryPromises];
       if (dbTxs.length > 0) {
-          const { data, error } = await supabase.from('transactions').insert(dbTxs).select();
-          if (!error && data) {
-              setTransactions(prev => {
-                  let updated = [...prev];
-                  data.forEach((dbTx: any) => {
-                      const index = updated.findIndex(t => 
-                          t.itemNameEn === dbTx.item_name_en && 
-                          t.date === dbTx.date &&
-                          t.id.length < 15
-                      );
-                      if (index !== -1) {
-                          updated[index] = { ...updated[index], id: dbTx.id };
-                      }
-                  });
-                  return updated;
-              });
-          }
+          promises.push(supabase.from('transactions').insert(dbTxs) as any);
       }
+      
+      await Promise.all(promises);
   };
 
   if (loading) {
@@ -945,7 +933,7 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+      <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
         <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
         <Login onLogin={handleLogin} language={language} users={users} />
       </div>
@@ -954,7 +942,7 @@ const App: React.FC = () => {
 
   if (currentUser.role === 'admin' && !selectedLocation) {
      return (
-        <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+        <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
             <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
             <AdminDashboard 
                 users={users}
@@ -975,7 +963,7 @@ const App: React.FC = () => {
 
   if (currentUser.role === 'mammal_employee' && selectedLocation === 'mammal') {
       return (
-          <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+          <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
               <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
               <MammalEmployeeDashboard 
                   items={inventory['mammal'] || []}
@@ -992,7 +980,7 @@ const App: React.FC = () => {
 
   if (!selectedLocation) {
     return (
-      <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+      <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
         <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
         <LocationSelection 
           onSelect={setSelectedLocation} 
@@ -1025,7 +1013,7 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+    <div className={`font-sans antialiased text-gray-900 bg-gray-50 dark:bg-gray-900 min-h-screen overflow-x-hidden transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
       <ThemeLanguageControls language={language} theme={theme} onToggleLanguage={toggleLanguage} onToggleTheme={toggleTheme} />
       <InventoryDashboard 
         locationId={selectedLocation} 

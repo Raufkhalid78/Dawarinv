@@ -44,6 +44,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
     const [quantity, setQuantity] = useState('');
     const [transferList, setTransferList] = useState<TransferItem[]>([]);
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const sources = availableLocations;
     const destinations = availableLocations.filter(l => l.id !== sourceLocation);
@@ -103,7 +104,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
         setQuantity('');
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (transferList.length === 0) { setError(t.noItemsInList); return; }
         if (!targetLocation) { setError(t.selectLocation); return; }
@@ -123,8 +124,16 @@ const TransferModal: React.FC<TransferModalProps> = ({
             }
         }
 
-        onTransfer(transferList.map(item => ({ itemId: item.itemId, quantity: item.quantity })), targetLocation, sourceLocation);
-        onClose();
+        setIsSubmitting(true);
+        try {
+            await onTransfer(transferList.map(item => ({ itemId: item.itemId, quantity: item.quantity })), targetLocation, sourceLocation);
+            onClose();
+        } catch (err) {
+            console.error("Transfer submission error", err);
+            setError("Failed to complete transfer. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -224,8 +233,15 @@ const TransferModal: React.FC<TransferModalProps> = ({
                 </div>
 
                 <div className="p-5 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex gap-3">
-                    <button type="button" onClick={onClose} className="flex-1 px-4 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-2xl transition-all text-sm">{t.cancel}</button>
-                    <button onClick={handleSubmit} disabled={transferList.length === 0 || !targetLocation} className="flex-1 px-4 py-3 bg-brand-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-2xl font-bold transition-all shadow-lg text-sm">{t.submitTransfer}</button>
+                    <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 px-4 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-2xl transition-all text-sm disabled:opacity-50">{t.cancel}</button>
+                    <button onClick={handleSubmit} disabled={transferList.length === 0 || !targetLocation || isSubmitting} className="flex-1 px-4 py-3 bg-brand-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-2xl font-bold transition-all shadow-lg text-sm flex items-center justify-center gap-2">
+                        {isSubmitting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                {language === 'ar' ? 'جاري الإرسال...' : 'Submitting...'}
+                            </>
+                        ) : t.submitTransfer}
+                    </button>
                 </div>
             </div>
         </div>
