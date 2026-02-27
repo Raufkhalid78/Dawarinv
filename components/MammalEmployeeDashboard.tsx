@@ -157,10 +157,14 @@ const MammalEmployeeDashboard: React.FC<MammalEmployeeDashboardProps> = ({
                             <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
                         <div>
-                            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-arabic">
+                            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-arabic leading-tight">
                                 {t.logSheet}
                             </h1>
-                            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t.mammal}</p>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tighter">Live</span>
+                                <span className="text-[10px] text-gray-400 ml-1">• {t.mammal}</span>
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">

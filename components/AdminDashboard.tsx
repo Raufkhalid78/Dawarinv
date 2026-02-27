@@ -222,7 +222,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="p-1.5 bg-brand-600 rounded-lg text-white">
                         <Shield className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-gray-900 dark:text-white">{t.adminDashboard}</span>
+                    <div className="flex flex-col">
+                        <span className="font-bold text-gray-900 dark:text-white leading-tight">{t.adminDashboard}</span>
+                        <div className="flex items-center gap-1">
+                            <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-[8px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tighter">Live</span>
+                        </div>
+                    </div>
                 </div>
                 <button onClick={onLogout} className="p-2 text-red-500 rounded-lg">
                     <LogOut className="w-5 h-5 rtl:rotate-180" />
@@ -237,7 +243,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <div className="p-2 bg-brand-600 rounded-lg text-white">
                                 <Shield className="w-6 h-6" />
                             </div>
-                            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t.adminDashboard}</h1>
+                            <div>
+                                <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{t.adminDashboard}</h1>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-widest">Real-time Connected</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

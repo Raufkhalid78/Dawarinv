@@ -187,17 +187,23 @@ const App: React.FC = () => {
       // Set up real-time subscriptions
       const txSubscription = supabase
         .channel('transactions-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
+          console.log('Real-time transaction update:', payload);
           fetchData();
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Transactions subscription status:', status);
+        });
 
       const invSubscription = supabase
         .channel('inventory-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, (payload) => {
+          console.log('Real-time inventory update:', payload);
           fetchData();
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Inventory subscription status:', status);
+        });
 
       return () => {
         supabase.removeChannel(txSubscription);
@@ -207,14 +213,24 @@ const App: React.FC = () => {
 
   // Request Notification Permission
   const requestNotificationPermission = async () => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if (!('Notification' in window)) return;
+    
+    if (Notification.permission === 'default') {
       try {
-          await Notification.requestPermission();
+          const permission = await Notification.requestPermission();
+          console.log('Notification permission:', permission);
       } catch (e) {
           console.warn("Notification permission request failed", e);
       }
     }
   };
+
+  // Auto-request permission on login
+  useEffect(() => {
+    if (currentUser) {
+      requestNotificationPermission();
+    }
+  }, [currentUser]);
 
   // Notification Trigger Effect
   useEffect(() => {

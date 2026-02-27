@@ -57,27 +57,27 @@ const LocationSelection: React.FC<LocationSelectionProps> = ({ onSelect, onLogou
         <p className="text-xl text-gray-600 dark:text-gray-300">{t.selectLocationSub}</p>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl w-full">
         {/* Global Overview Card */}
         {canSeeGlobal && (
           <button
             onClick={() => onSelect('all')}
-            className="relative group bg-brand-600 text-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8 text-left rtl:text-right flex flex-col h-64 justify-between overflow-hidden"
+            className="relative group bg-brand-600 text-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 p-6 sm:p-8 text-left rtl:text-right flex flex-col h-56 sm:h-64 justify-between overflow-hidden"
           >
-            <div className="absolute top-0 right-0 rtl:right-auto rtl:left-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-               <Globe className="w-32 h-32" />
+            <div className="absolute top-0 right-0 rtl:right-auto rtl:left-0 p-4 sm:p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+               <Globe className="w-24 h-24 sm:w-32 sm:h-32" />
             </div>
 
             <div className="relative z-10">
-              <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center mb-6">
-                 <Globe className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/20 flex items-center justify-center mb-4 sm:mb-6">
+                 <Globe className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
-              <h3 className="text-2xl font-bold mb-2 line-clamp-1">{t.globalInventory}</h3>
-              <p className="text-brand-100 line-clamp-2">{t.globalInventoryDesc}</p>
+              <h3 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2 line-clamp-1">{t.globalInventory}</h3>
+              <p className="text-sm sm:text-base text-brand-100 line-clamp-2">{t.globalInventoryDesc}</p>
             </div>
 
-            <div className="relative z-10 flex items-center font-semibold mt-4 group-hover:translate-x-2 rtl:group-hover:-translate-x-2 transition-transform">
-              {t.accessInventory} <ArrowRight className="w-5 h-5 ml-2 rtl:mr-2 rtl:ml-0 rtl:rotate-180" />
+            <div className="relative z-10 flex items-center text-sm sm:text-base font-semibold mt-4 group-hover:translate-x-2 rtl:group-hover:-translate-x-2 transition-transform">
+              {t.accessInventory} <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 rtl:mr-2 rtl:ml-0 rtl:rotate-180" />
             </div>
           </button>
         )}
@@ -86,22 +86,22 @@ const LocationSelection: React.FC<LocationSelectionProps> = ({ onSelect, onLogou
           <button
             key={location.id}
             onClick={() => onSelect(location.id)}
-            className="relative group bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-8 text-left rtl:text-right border border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-500 flex flex-col h-64 justify-between overflow-hidden"
+            className="relative group bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 p-6 sm:p-8 text-left rtl:text-right border border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-500 flex flex-col h-56 sm:h-64 justify-between overflow-hidden"
           >
-            <div className="absolute top-0 right-0 rtl:right-auto rtl:left-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-               {renderIcon(location.icon, "w-32 h-32 text-brand-600 dark:text-brand-500")}
+            <div className="absolute top-0 right-0 rtl:right-auto rtl:left-0 p-4 sm:p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+               {renderIcon(location.icon, "w-24 h-24 sm:w-32 sm:h-32 text-brand-600 dark:text-brand-500")}
             </div>
 
             <div className="relative z-10">
-              <div className="w-14 h-14 rounded-xl bg-brand-50 dark:bg-gray-700 flex items-center justify-center mb-6 group-hover:bg-brand-600 transition-colors">
-                 {renderIcon(location.icon, "w-7 h-7 text-brand-600 dark:text-brand-500 group-hover:text-white transition-colors")}
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-50 dark:bg-gray-700 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-brand-600 transition-colors">
+                 {renderIcon(location.icon, "w-6 h-6 sm:w-7 sm:h-7 text-brand-600 dark:text-brand-500 group-hover:text-white transition-colors")}
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-1">{getLocationName(location)}</h3>
-              <p className="text-gray-500 dark:text-gray-400 line-clamp-2">{getLocationDesc(location)}</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2 line-clamp-1">{getLocationName(location)}</h3>
+              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 line-clamp-2">{getLocationDesc(location)}</p>
             </div>
 
-            <div className="relative z-10 flex items-center text-brand-600 dark:text-brand-400 font-semibold mt-4 group-hover:translate-x-2 rtl:group-hover:-translate-x-2 transition-transform">
-              {t.accessInventory} <ArrowRight className="w-5 h-5 ml-2 rtl:mr-2 rtl:ml-0 rtl:rotate-180" />
+            <div className="relative z-10 flex items-center text-sm sm:text-base text-brand-600 dark:text-brand-400 font-semibold mt-4 group-hover:translate-x-2 rtl:group-hover:-translate-x-2 transition-transform">
+              {t.accessInventory} <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 rtl:mr-2 rtl:ml-0 rtl:rotate-180" />
             </div>
           </button>
         ))}

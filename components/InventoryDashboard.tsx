@@ -317,9 +317,10 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               <div className="overflow-hidden">
                 <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 truncate">
                   {locationName} 
-                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-xs font-medium border border-brand-100 dark:border-brand-800">
-                    {inventory.length}
-                  </span>
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tighter">Live</span>
+                  </div>
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{isGlobalView ? t.globalInventoryDesc : t.subtitle}</p>
               </div>
@@ -433,101 +434,103 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                   placeholder={t.searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-gray-900 dark:text-white transition-all"
+                  className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-gray-900 dark:text-white transition-all text-sm"
                 />
-                <Search className="w-5 h-5 text-gray-400 absolute left-3 rtl:right-3 rtl:left-auto top-3.5" />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 rtl:right-3 rtl:left-auto top-3.5" />
               </div>
 
-              {/* View Dropdown */}
-              <div className="relative group">
-                <button className="h-full px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200">
-                    <LayoutGrid className="w-5 h-5" />
-                    <span className="hidden sm:inline">{t.view}</span>
-                    <ChevronDown className="w-4 h-4" />
-                </button>
-                <div className="absolute top-full left-0 rtl:right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-20">
-                     <p className="text-xs font-bold text-gray-400 px-3 py-2 uppercase">{t.view}</p>
-                     <button onClick={() => setViewMode('grid')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'grid' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                         <LayoutGrid className="w-4 h-4" /> {t.tiles}
-                     </button>
-                     <button onClick={() => setViewMode('list')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'list' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                         <ListIcon className="w-4 h-4" /> {t.list}
-                     </button>
-                     <button onClick={() => setViewMode('compact')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'compact' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                         <Grid3X3 className="w-4 h-4" /> {t.box}
-                     </button>
-                </div>
-              </div>
-
-              {/* Sort Dropdown */}
-              <div className="relative group">
-                <button className="h-full px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200">
-                    <ArrowUpDown className="w-5 h-5" />
-                    <span className="hidden sm:inline">{t.sortBy}</span>
-                    <ChevronDown className="w-4 h-4" />
-                </button>
-                <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-20">
-                    <p className="text-xs font-bold text-gray-400 px-3 py-2 uppercase">{t.sortBy}</p>
-                    <button onClick={() => setSortBy('name')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'name' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortName}</button>
-                    <button onClick={() => setSortBy('quantity')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'quantity' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortQuantity}</button>
-                    <button onClick={() => setSortBy('lastUpdated')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'lastUpdated' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortDate}</button>
-                    
-                    <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
-                    
-                    <p className="text-xs font-bold text-gray-400 px-3 py-2 uppercase">{t.order}</p>
-                    <button onClick={() => setSortOrder('asc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'asc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.ascending}</button>
-                    <button onClick={() => setSortOrder('desc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'desc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.descending}</button>
-                </div>
-              </div>
-
-              <div className="relative group">
-                <button className="h-full px-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200">
-                  <Filter className="w-5 h-5" />
-                  <span className="hidden sm:inline">{t.filter}</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-20">
-                    <p className="text-xs font-bold text-gray-400 px-3 py-2 uppercase">{t.category}</p>
-                    <button onClick={() => setSelectedCategory('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
-                    {categories.map(cat => (
-                        <button key={cat} onClick={() => setSelectedCategory(cat)} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === cat ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{cat}</button>
-                    ))}
-                    <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
-                    <p className="text-xs font-bold text-gray-400 px-3 py-2 uppercase">{t.stockStatus}</p>
-                    <button onClick={() => setStockStatusFilter('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
-                    <button onClick={() => setStockStatusFilter('lowStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'lowStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.lowStock}</button>
-                    <button onClick={() => setStockStatusFilter('inStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'inStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.inStock}</button>
-                </div>
-              </div>
-
-              {!isGlobalView && (
-                <button 
-                  onClick={toggleSelectAll}
-                  className={`h-full px-4 border rounded-xl shadow-sm flex items-center gap-2 transition-colors ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50'}`}
-                >
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-white border-white' : 'border-gray-300 dark:border-gray-600'}`}>
-                    {selectedItemIds.size === filteredItems.length && filteredItems.length > 0 && <div className="w-2 h-2 bg-brand-600 rounded-sm"></div>}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                {/* View Dropdown */}
+                <div className="relative group shrink-0">
+                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                      <LayoutGrid className="w-4 h-4" />
+                      <span className="hidden md:inline">{t.view}</span>
+                      <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
+                       <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.view}</p>
+                       <button onClick={() => setViewMode('grid')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'grid' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                           <LayoutGrid className="w-4 h-4" /> {t.tiles}
+                       </button>
+                       <button onClick={() => setViewMode('list')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'list' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                           <ListIcon className="w-4 h-4" /> {t.list}
+                       </button>
+                       <button onClick={() => setViewMode('compact')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'compact' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                           <Grid3X3 className="w-4 h-4" /> {t.box}
+                       </button>
                   </div>
-                  <span className="hidden sm:inline">{selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? t.deselectAll : t.selectAll}</span>
-                </button>
-              )}
+                </div>
+
+                {/* Sort Dropdown */}
+                <div className="relative group shrink-0">
+                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                      <ArrowUpDown className="w-4 h-4" />
+                      <span className="hidden md:inline">{t.sortBy}</span>
+                      <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
+                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.sortBy}</p>
+                      <button onClick={() => setSortBy('name')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'name' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortName}</button>
+                      <button onClick={() => setSortBy('quantity')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'quantity' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortQuantity}</button>
+                      <button onClick={() => setSortBy('lastUpdated')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'lastUpdated' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortDate}</button>
+                      
+                      <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                      
+                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.order}</p>
+                      <button onClick={() => setSortOrder('asc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'asc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.ascending}</button>
+                      <button onClick={() => setSortOrder('desc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'desc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.descending}</button>
+                  </div>
+                </div>
+
+                <div className="relative group shrink-0">
+                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                    <Filter className="w-4 h-4" />
+                    <span className="hidden md:inline">{t.filter}</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
+                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.category}</p>
+                      <button onClick={() => setSelectedCategory('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
+                      {categories.map(cat => (
+                          <button key={cat} onClick={() => setSelectedCategory(cat)} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === cat ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{cat}</button>
+                      ))}
+                      <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.stockStatus}</p>
+                      <button onClick={() => setStockStatusFilter('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
+                      <button onClick={() => setStockStatusFilter('lowStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'lowStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.lowStock}</button>
+                      <button onClick={() => setStockStatusFilter('inStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'inStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.inStock}</button>
+                  </div>
+                </div>
+
+                {!isGlobalView && (
+                  <button 
+                    onClick={toggleSelectAll}
+                    className={`h-11 px-3 border rounded-xl shadow-sm flex items-center gap-2 transition-colors shrink-0 ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50'}`}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? 'bg-white border-white' : 'border-gray-300 dark:border-gray-600'}`}>
+                      {selectedItemIds.size === filteredItems.length && filteredItems.length > 0 && <div className="w-2 h-2 bg-brand-600 rounded-sm"></div>}
+                    </div>
+                    <span className="hidden md:inline text-sm">{selectedItemIds.size === filteredItems.length && filteredItems.length > 0 ? t.deselectAll : t.selectAll}</span>
+                  </button>
+                )}
+              </div>
             </div>
-            
+
             {/* Actions */}
             {!isGlobalView && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full lg:w-auto">
                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileUpload} />
-                 <button onClick={() => fileInputRef.current?.click()} disabled={isProcessingPdf} className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-blue-200 dark:shadow-none disabled:opacity-50">
-                    {isProcessingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                 <button onClick={() => fileInputRef.current?.click()} disabled={isProcessingPdf} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-blue-200 dark:shadow-none disabled:opacity-50 text-sm">
+                    {isProcessingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                     <span className="hidden sm:inline">{t.smartUpload}</span>
                  </button>
-                 <button onClick={() => setIsTransferModalOpen(true)} className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-                    <ArrowRightLeft className="w-5 h-5" />
+                 <button onClick={() => setIsTransferModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm text-sm">
+                    <ArrowRightLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">{t.transfer}</span>
                  </button>
                  {(userRole !== 'branch_manager' || userBranchCode === locationId) && (
-                    <button onClick={() => { setItemToEdit(null); setIsAddItemModalOpen(true); }} className="flex items-center gap-2 px-4 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-brand-200 dark:shadow-none">
-                        <Plus className="w-5 h-5" />
+                    <button onClick={() => { setItemToEdit(null); setIsAddItemModalOpen(true); }} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-brand-200 dark:shadow-none text-sm">
+                        <Plus className="w-4 h-4" />
                         <span className="hidden sm:inline">{t.addItem}</span>
                     </button>
                  )}
