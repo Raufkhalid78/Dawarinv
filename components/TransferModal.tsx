@@ -43,6 +43,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
     const [selectedItemId, setSelectedItemId] = useState('');
     const [quantity, setQuantity] = useState('');
     const [transferList, setTransferList] = useState<TransferItem[]>([]);
+    const [bulkQuantity, setBulkQuantity] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -102,6 +103,20 @@ const TransferModal: React.FC<TransferModalProps> = ({
         }
         setSelectedItemId('');
         setQuantity('');
+    };
+
+    const handleSetAllToMax = () => {
+        setTransferList(prev => prev.map(item => {
+            const sourceItem = items.find(i => i.id === item.itemId);
+            return { ...item, quantity: sourceItem?.quantity || 0 };
+        }));
+    };
+
+    const handleApplyBulkQuantity = () => {
+        const qty = Number(bulkQuantity);
+        if (isNaN(qty) || qty < 0) return;
+        setTransferList(prev => prev.map(item => ({ ...item, quantity: qty })));
+        setBulkQuantity('');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -189,7 +204,40 @@ const TransferModal: React.FC<TransferModalProps> = ({
                     )}
 
                     <div className="space-y-2">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-2"><List className="w-4 h-4" /> {t.transferList}</h3>
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2"><List className="w-4 h-4" /> {t.transferList}</h3>
+                            {transferList.length > 1 && (
+                                <div className="flex gap-2">
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSetAllToMax}
+                                        className="text-[10px] font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-1 rounded-lg transition-colors"
+                                    >
+                                        {t.setAllToMax}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {transferList.length > 1 && (
+                            <div className="flex gap-2 mb-3">
+                                <input 
+                                    type="number" 
+                                    value={bulkQuantity} 
+                                    onChange={(e) => setBulkQuantity(e.target.value)}
+                                    className="flex-1 px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" 
+                                    placeholder={t.setAllToQty} 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={handleApplyBulkQuantity}
+                                    className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    {t.applyToAll}
+                                </button>
+                            </div>
+                        )}
+
                         <div className="border border-gray-100 dark:border-gray-700 rounded-2xl bg-gray-50/50 dark:bg-gray-900/50 min-h-[100px] overflow-hidden">
                             {transferList.length === 0 ? (
                                 <div className="py-12 text-center text-gray-400 text-xs italic">{t.noItemsInList}</div>

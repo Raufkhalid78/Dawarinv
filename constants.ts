@@ -245,7 +245,10 @@ export const TRANSLATIONS = {
     itemsSelected: "Items Selected",
     bulkEdit: "Bulk Edit",
     confirmDelete: "Are you sure you want to delete the selected items?",
-    available: "available"
+    available: "available",
+    setAllToMax: "Set All to Max Stock",
+    setAllToQty: "Set All to Quantity",
+    applyToAll: "Apply to All"
   },
   ar: {
     title: "دوار السعادة",
@@ -451,6 +454,9 @@ export const TRANSLATIONS = {
     itemsSelected: "عناصر مختارة",
     bulkEdit: "تعديل جماعي",
     confirmDelete: "هل أنت متأكد من حذف العناصر المختارة؟",
-    available: "متاح"
+    available: "متاح",
+    setAllToMax: "تعيين الكل للحد الأقصى",
+    setAllToQty: "تعيين الكل لكمية محددة",
+    applyToAll: "تطبيق على الكل"
   }
 };

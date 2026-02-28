@@ -785,13 +785,25 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
             
             <div className="flex items-center gap-2">
-              <button 
-                onClick={handleBulkEdit}
-                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-800 rounded-xl transition-colors text-sm font-bold"
-              >
-                <Pencil className="w-4 h-4 text-brand-400" />
-                {t.edit}
-              </button>
+              {(userRole === 'admin' || userRole === 'warehouse_manager') && (
+                <>
+                  <button 
+                    onClick={handleBulkEdit}
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-gray-800 rounded-xl transition-colors text-sm font-bold"
+                  >
+                    <Pencil className="w-4 h-4 text-brand-400" />
+                    {t.edit}
+                  </button>
+
+                  <button 
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-red-900/30 text-red-400 rounded-xl transition-colors text-sm font-bold"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {t.delete}
+                  </button>
+                </>
+              )}
 
               <button 
                 onClick={handleBulkTransfer}
@@ -799,14 +811,6 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               >
                 <ArrowRightLeft className="w-4 h-4 text-blue-400" />
                 {t.transfer}
-              </button>
-              
-              <button 
-                onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-4 py-2 hover:bg-red-900/30 text-red-400 rounded-xl transition-colors text-sm font-bold"
-              >
-                <Trash2 className="w-4 h-4" />
-                {t.delete}
               </button>
               
               <button 
