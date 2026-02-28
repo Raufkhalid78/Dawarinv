@@ -109,6 +109,9 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
   const [usageItem, setUsageItem] = useState<InventoryItem | null>(null);
 
+  // Dropdown states
+  const [activeDropdown, setActiveDropdown] = useState<'view' | 'sort' | 'filter' | null>(null);
+
   // Grouped Notifications State
   const [selectedTransferGroup, setSelectedTransferGroup] = useState<string | null>(null);
   const [rejectionTarget, setRejectionTarget] = useState<Transaction[] | null>(null);
@@ -122,7 +125,10 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    const handleClickOutside = () => setActiveActionId(null);
+    const handleClickOutside = () => {
+        setActiveActionId(null);
+        setActiveDropdown(null);
+    };
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
@@ -425,7 +431,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
           )}
 
           {/* Action & Filter Bar */}
-          <div className="flex flex-col lg:flex-row justify-between gap-4 mb-6">
+          <div className="flex flex-col lg:flex-row justify-between gap-4 mb-6 relative z-40">
             {/* Search & Filter */}
             <div className="flex flex-1 gap-2 flex-wrap sm:flex-nowrap">
               <div className="relative flex-1 min-w-[200px] w-full max-w-md">
@@ -439,67 +445,82 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 rtl:right-3 rtl:left-auto top-3.5" />
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+              <div className="flex items-center gap-2 pb-1 sm:pb-0">
                 {/* View Dropdown */}
-                <div className="relative group shrink-0">
-                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                <div className="relative shrink-0">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'view' ? null : 'view'); }}
+                    className={`h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm ${activeDropdown === 'view' ? 'ring-2 ring-brand-500' : ''}`}
+                  >
                       <LayoutGrid className="w-4 h-4" />
                       <span className="hidden md:inline">{t.view}</span>
-                      <ChevronDown className="w-3 h-3" />
+                      <ChevronDown className={`w-3 h-3 transition-transform ${activeDropdown === 'view' ? 'rotate-180' : ''}`} />
                   </button>
-                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
-                       <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.view}</p>
-                       <button onClick={() => setViewMode('grid')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'grid' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                           <LayoutGrid className="w-4 h-4" /> {t.tiles}
-                       </button>
-                       <button onClick={() => setViewMode('list')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'list' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                           <ListIcon className="w-4 h-4" /> {t.list}
-                       </button>
-                       <button onClick={() => setViewMode('compact')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'compact' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
-                           <Grid3X3 className="w-4 h-4" /> {t.box}
-                       </button>
-                  </div>
+                  {activeDropdown === 'view' && (
+                    <div className="absolute top-full left-0 rtl:right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 z-30">
+                         <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.view}</p>
+                         <button onClick={() => { setViewMode('grid'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'grid' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                             <LayoutGrid className="w-4 h-4" /> {t.tiles}
+                         </button>
+                         <button onClick={() => { setViewMode('list'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'list' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                             <ListIcon className="w-4 h-4" /> {t.list}
+                         </button>
+                         <button onClick={() => { setViewMode('compact'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 ${viewMode === 'compact' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>
+                             <Grid3X3 className="w-4 h-4" /> {t.box}
+                         </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sort Dropdown */}
-                <div className="relative group shrink-0">
-                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                <div className="relative shrink-0">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'sort' ? null : 'sort'); }}
+                    className={`h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm ${activeDropdown === 'sort' ? 'ring-2 ring-brand-500' : ''}`}
+                  >
                       <ArrowUpDown className="w-4 h-4" />
                       <span className="hidden md:inline">{t.sortBy}</span>
-                      <ChevronDown className="w-3 h-3" />
+                      <ChevronDown className={`w-3 h-3 transition-transform ${activeDropdown === 'sort' ? 'rotate-180' : ''}`} />
                   </button>
-                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
-                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.sortBy}</p>
-                      <button onClick={() => setSortBy('name')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'name' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortName}</button>
-                      <button onClick={() => setSortBy('quantity')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'quantity' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortQuantity}</button>
-                      <button onClick={() => setSortBy('lastUpdated')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'lastUpdated' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortDate}</button>
-                      
-                      <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
-                      
-                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.order}</p>
-                      <button onClick={() => setSortOrder('asc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'asc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.ascending}</button>
-                      <button onClick={() => setSortOrder('desc')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'desc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.descending}</button>
-                  </div>
+                  {activeDropdown === 'sort' && (
+                    <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 z-30">
+                        <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.sortBy}</p>
+                        <button onClick={() => { setSortBy('name'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'name' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortName}</button>
+                        <button onClick={() => { setSortBy('quantity'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'quantity' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortQuantity}</button>
+                        <button onClick={() => { setSortBy('lastUpdated'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortBy === 'lastUpdated' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.sortDate}</button>
+                        
+                        <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                        
+                        <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.order}</p>
+                        <button onClick={() => { setSortOrder('asc'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'asc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.ascending}</button>
+                        <button onClick={() => { setSortOrder('desc'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${sortOrder === 'desc' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.descending}</button>
+                    </div>
+                  )}
                 </div>
 
-                <div className="relative group shrink-0">
-                  <button className="h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm">
+                <div className="relative shrink-0">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'filter' ? null : 'filter'); }}
+                    className={`h-11 px-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm ${activeDropdown === 'filter' ? 'ring-2 ring-brand-500' : ''}`}
+                  >
                     <Filter className="w-4 h-4" />
                     <span className="hidden md:inline">{t.filter}</span>
-                    <ChevronDown className="w-3 h-3" />
+                    <ChevronDown className={`w-3 h-3 transition-transform ${activeDropdown === 'filter' ? 'rotate-180' : ''}`} />
                   </button>
-                  <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 hidden group-hover:block z-30">
-                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.category}</p>
-                      <button onClick={() => setSelectedCategory('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
-                      {categories.map(cat => (
-                          <button key={cat} onClick={() => setSelectedCategory(cat)} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === cat ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{cat}</button>
-                      ))}
-                      <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
-                      <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.stockStatus}</p>
-                      <button onClick={() => setStockStatusFilter('all')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
-                      <button onClick={() => setStockStatusFilter('lowStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'lowStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.lowStock}</button>
-                      <button onClick={() => setStockStatusFilter('inStock')} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'inStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.inStock}</button>
-                  </div>
+                  {activeDropdown === 'filter' && (
+                    <div className="absolute top-full left-0 rtl:right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 z-30">
+                        <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.category}</p>
+                        <button onClick={() => { setSelectedCategory('all'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
+                        {categories.map(cat => (
+                            <button key={cat} onClick={() => { setSelectedCategory(cat); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${selectedCategory === cat ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{cat}</button>
+                        ))}
+                        <div className="my-2 border-t border-gray-100 dark:border-gray-700"></div>
+                        <p className="text-[10px] font-bold text-gray-400 px-3 py-2 uppercase">{t.stockStatus}</p>
+                        <button onClick={() => { setStockStatusFilter('all'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'all' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.allStatuses}</button>
+                        <button onClick={() => { setStockStatusFilter('lowStock'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'lowStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.lowStock}</button>
+                        <button onClick={() => { setStockStatusFilter('inStock'); setActiveDropdown(null); }} className={`w-full text-left rtl:text-right px-3 py-2 rounded-lg text-sm ${stockStatusFilter === 'inStock' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}>{t.inStock}</button>
+                    </div>
+                  )}
                 </div>
 
                 {!isGlobalView && (

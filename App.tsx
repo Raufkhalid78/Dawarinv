@@ -667,111 +667,59 @@ const App: React.FC = () => {
   const handleConfirmSourceTransfer = async (transaction: Transaction) => {
       if (!currentUser) return;
       
-      const sourceItem = (inventory[transaction.fromLocation!] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
-      
-      // Optimistic Update
-      if (sourceItem) {
-          setInventory(prev => ({
-              ...prev,
-              [transaction.fromLocation!]: prev[transaction.fromLocation!].map(i => 
-                  i.id === sourceItem.id ? { ...i, quantity: i.quantity - transaction.quantity } : i
-              )
-          }));
-      }
+      try {
+          const sourceItem = (inventory[transaction.fromLocation!] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
+          
+          // Optimistic Update
+          if (sourceItem) {
+              setInventory(prev => ({
+                  ...prev,
+                  [transaction.fromLocation!]: prev[transaction.fromLocation!].map(i => 
+                      i.id === sourceItem.id ? { ...i, quantity: i.quantity - transaction.quantity } : i
+                  )
+              }));
+          }
 
-      setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'pending_target' } : t));
+          setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'pending_target' } : t));
 
-      // Backend - Parallelized
-      const promises: any[] = [];
-      if (sourceItem) {
-          promises.push(supabase.from('inventory_items').update({
-              quantity: sourceItem.quantity - transaction.quantity
-          }).eq('id', sourceItem.id));
+          // Backend - Parallelized
+          const promises: any[] = [];
+          if (sourceItem) {
+              promises.push(supabase.from('inventory_items').update({
+                  quantity: sourceItem.quantity - transaction.quantity
+              }).eq('id', sourceItem.id));
+          }
+          promises.push(supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id));
+          await Promise.all(promises);
+      } catch (error) {
+          console.error("Error in handleConfirmSourceTransfer:", error);
       }
-      promises.push(supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id));
-      await Promise.all(promises);
   };
 
   const handleReceiveTransfer = async (transaction: Transaction) => {
       if (!currentUser) return;
-      const targetLocation = transaction.toLocation!;
       
-      // Optimistic Update
-      const existingItems = inventory[targetLocation] || [];
-      const destItem = existingItems.find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
+      try {
+          const targetLocation = transaction.toLocation!;
+          
+          // Optimistic Update
+          const existingItems = inventory[targetLocation] || [];
+          const destItem = existingItems.find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
 
-      if (destItem) {
-          setInventory(prev => ({
-              ...prev,
-              [targetLocation]: prev[targetLocation].map(i => 
-                  i.id === destItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
-              )
-          }));
-      } else {
-          const newItem: InventoryItem = {
-              id: generateId(),
-              locationId: targetLocation,
-              nameEn: transaction.itemNameEn,
-              nameAr: transaction.itemNameAr,
-              category: 'Received',
-              quantity: transaction.quantity,
-              unit: transaction.unit,
-              minThreshold: 0,
-              lastUpdated: new Date().toISOString()
-          };
-          setInventory(prev => ({
-              ...prev,
-              [targetLocation]: [...(prev[targetLocation] || []), newItem]
-          }));
-      }
-
-      setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'completed' } : t));
-
-      // Backend - Parallelized
-      const promises: any[] = [];
-      if (destItem) {
-          promises.push(supabase.from('inventory_items').update({
-              quantity: destItem.quantity + transaction.quantity
-          }).eq('id', destItem.id));
-      } else {
-          promises.push(supabase.from('inventory_items').insert([{
-              location_id: targetLocation,
-              name_en: transaction.itemNameEn,
-              name_ar: transaction.itemNameAr,
-              category: 'Received',
-              quantity: transaction.quantity,
-              unit: transaction.unit,
-              min_threshold: 0
-          }]));
-      }
-      promises.push(supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id));
-      await Promise.all(promises);
-  };
-
-  const handleRejectTransfer = async (transaction: Transaction, reason: string) => {
-      if (!currentUser) return;
-      const sourceLocation = transaction.fromLocation!;
-      const wasDeducted = transaction.status === 'pending_target';
-      
-      const sourceItem = (inventory[sourceLocation] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
-
-      // Optimistic Update
-      if (wasDeducted) {
-          if (sourceItem) {
-               setInventory(prev => ({
+          if (destItem) {
+              setInventory(prev => ({
                   ...prev,
-                  [sourceLocation]: prev[sourceLocation].map(i => 
-                      i.id === sourceItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
+                  [targetLocation]: prev[targetLocation].map(i => 
+                      i.id === destItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
                   )
               }));
           } else {
-              // Restore item
-              const restoredItem: InventoryItem = {
+              const newItem: InventoryItem = {
                   id: generateId(),
-                  locationId: sourceLocation,
+                  locationId: targetLocation,
                   nameEn: transaction.itemNameEn,
                   nameAr: transaction.itemNameAr,
-                  category: 'Returned',
+                  category: 'Received',
                   quantity: transaction.quantity,
                   unit: transaction.unit,
                   minThreshold: 0,
@@ -779,34 +727,100 @@ const App: React.FC = () => {
               };
               setInventory(prev => ({
                   ...prev,
-                  [sourceLocation]: [...(prev[sourceLocation] || []), restoredItem]
+                  [targetLocation]: [...(prev[targetLocation] || []), newItem]
               }));
           }
-      }
 
-      setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'rejected', rejectionReason: reason } : t));
+          setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'completed' } : t));
 
-      // Backend - Parallelized
-      const promises: any[] = [];
-      if (wasDeducted) {
-          if (sourceItem) {
-               promises.push(supabase.from('inventory_items').update({
-                  quantity: sourceItem.quantity + transaction.quantity
-              }).eq('id', sourceItem.id));
+          // Backend - Parallelized
+          const promises: any[] = [];
+          if (destItem) {
+              promises.push(supabase.from('inventory_items').update({
+                  quantity: destItem.quantity + transaction.quantity
+              }).eq('id', destItem.id));
           } else {
               promises.push(supabase.from('inventory_items').insert([{
-                  location_id: sourceLocation,
+                  location_id: targetLocation,
                   name_en: transaction.itemNameEn,
                   name_ar: transaction.itemNameAr,
-                  category: 'Returned',
+                  category: 'Received',
                   quantity: transaction.quantity,
                   unit: transaction.unit,
                   min_threshold: 0
               }]));
           }
+          promises.push(supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id));
+          await Promise.all(promises);
+      } catch (error) {
+          console.error("Error in handleReceiveTransfer:", error);
       }
-      promises.push(supabase.from('transactions').update({ status: 'rejected', rejection_reason: reason }).eq('id', transaction.id));
-      await Promise.all(promises);
+  };
+
+  const handleRejectTransfer = async (transaction: Transaction, reason: string) => {
+      if (!currentUser) return;
+      
+      try {
+          const sourceLocation = transaction.fromLocation!;
+          const wasDeducted = transaction.status === 'pending_target';
+          
+          const sourceItem = (inventory[sourceLocation] || []).find(i => i.nameEn === transaction.itemNameEn || i.nameAr === transaction.itemNameAr);
+
+          // Optimistic Update
+          if (wasDeducted) {
+              if (sourceItem) {
+                   setInventory(prev => ({
+                      ...prev,
+                      [sourceLocation]: prev[sourceLocation].map(i => 
+                          i.id === sourceItem.id ? { ...i, quantity: i.quantity + transaction.quantity } : i
+                      )
+                  }));
+              } else {
+                  // Restore item
+                  const restoredItem: InventoryItem = {
+                      id: generateId(),
+                      locationId: sourceLocation,
+                      nameEn: transaction.itemNameEn,
+                      nameAr: transaction.itemNameAr,
+                      category: 'Returned',
+                      quantity: transaction.quantity,
+                      unit: transaction.unit,
+                      minThreshold: 0,
+                      lastUpdated: new Date().toISOString()
+                  };
+                  setInventory(prev => ({
+                      ...prev,
+                      [sourceLocation]: [...(prev[sourceLocation] || []), restoredItem]
+                  }));
+              }
+          }
+
+          setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'rejected', rejectionReason: reason } : t));
+
+          // Backend - Parallelized
+          const promises: any[] = [];
+          if (wasDeducted) {
+              if (sourceItem) {
+                   promises.push(supabase.from('inventory_items').update({
+                      quantity: sourceItem.quantity + transaction.quantity
+                  }).eq('id', sourceItem.id));
+              } else {
+                  promises.push(supabase.from('inventory_items').insert([{
+                      location_id: sourceLocation,
+                      name_en: transaction.itemNameEn,
+                      name_ar: transaction.itemNameAr,
+                      category: 'Returned',
+                      quantity: transaction.quantity,
+                      unit: transaction.unit,
+                      min_threshold: 0
+                  }]));
+              }
+          }
+          promises.push(supabase.from('transactions').update({ status: 'rejected', rejection_reason: reason }).eq('id', transaction.id));
+          await Promise.all(promises);
+      } catch (error) {
+          console.error("Error in handleRejectTransfer:", error);
+      }
   };
 
   const handleDailyLog = async (type: TransactionType, itemId: string, quantity: number, notes: string) => {
@@ -864,67 +878,83 @@ const App: React.FC = () => {
   const handleBulkLog = async (logs: { type: TransactionType, itemId: string, quantity: number, notes: string }[]) => {
       if (!currentUser || !selectedLocation || selectedLocation === 'all') return;
       
-      // Optimistic Update
-      const updatedLocationInventory = [...(inventory[selectedLocation] || [])];
-      const newTransactions: Transaction[] = [];
+      try {
+          const newTransactions: Transaction[] = [];
+          const updatedLocationInventory = [...(inventory[selectedLocation] || [])];
+          
+          // Calculate final quantities first to avoid race conditions
+          const quantityChanges: Record<string, number> = {};
+          
+          logs.forEach(log => {
+              const idx = updatedLocationInventory.findIndex(i => i.id === log.itemId);
+              if (idx !== -1) {
+                  const item = updatedLocationInventory[idx];
+                  const change = log.type === 'usage' ? -log.quantity : log.quantity;
+                  
+                  // Update local inventory state optimistically
+                  updatedLocationInventory[idx] = {
+                      ...item,
+                      quantity: item.quantity + change,
+                      lastUpdated: new Date().toISOString()
+                  };
+                  
+                  // Track cumulative change for backend update
+                  quantityChanges[log.itemId] = (quantityChanges[log.itemId] || 0) + change;
 
-      logs.forEach(log => {
-          const idx = updatedLocationInventory.findIndex(i => i.id === log.itemId);
-          if (idx !== -1) {
-              const item = updatedLocationInventory[idx];
-              const newQty = log.type === 'usage' ? item.quantity - log.quantity : item.quantity + log.quantity;
-              updatedLocationInventory[idx] = { ...item, quantity: newQty };
+                  newTransactions.push({
+                      id: generateId(),
+                      date: new Date().toISOString(),
+                      type: log.type,
+                      status: 'completed',
+                      fromLocation: log.type === 'usage' ? selectedLocation : 'External Supplier',
+                      toLocation: log.type === 'usage' ? 'Consumed' : selectedLocation,
+                      itemNameEn: item.nameEn,
+                      itemNameAr: item.nameAr,
+                      quantity: log.quantity,
+                      unit: item.unit,
+                      performedBy: currentUser.name,
+                      notes: log.notes
+                  });
+              }
+          });
 
-              newTransactions.push({
-                  id: generateId(),
-                  date: new Date().toISOString(),
-                  type: log.type,
-                  status: 'completed',
-                  fromLocation: log.type === 'usage' ? selectedLocation : 'External Supplier',
-                  toLocation: log.type === 'usage' ? 'Consumed' : selectedLocation,
-                  itemNameEn: item.nameEn,
-                  itemNameAr: item.nameAr,
-                  quantity: log.quantity,
-                  unit: item.unit,
-                  performedBy: currentUser.name,
-                  notes: log.notes
-              });
+          setInventory(prev => ({ ...prev, [selectedLocation]: updatedLocationInventory }));
+          setTransactions(prev => [...newTransactions, ...prev]);
+          
+          // Backend - Parallelized
+          const inventoryPromises = Object.entries(quantityChanges).map(async ([itemId, change]) => {
+              const item = (inventory[selectedLocation] || []).find(i => i.id === itemId);
+              if (item) {
+                   return supabase.from('inventory_items').update({ 
+                       quantity: item.quantity + change 
+                   }).eq('id', itemId);
+              }
+              return Promise.resolve();
+          });
+          
+          const dbTxs = newTransactions.map(t => ({
+              date: t.date,
+              type: t.type,
+              status: 'completed',
+              from_location: t.fromLocation,
+              to_location: t.toLocation,
+              item_name_en: t.itemNameEn,
+              item_name_ar: t.itemNameAr,
+              quantity: t.quantity,
+              unit: t.unit,
+              performed_by: t.performedBy,
+              notes: t.notes
+          }));
+          
+          const promises: Promise<any>[] = [...inventoryPromises];
+          if (dbTxs.length > 0) {
+              promises.push(supabase.from('transactions').insert(dbTxs) as any);
           }
-      });
-
-      setInventory(prev => ({ ...prev, [selectedLocation]: updatedLocationInventory }));
-      setTransactions(prev => [...newTransactions, ...prev]);
-      
-      // Backend - Parallelized
-      const inventoryPromises = logs.map(async (log) => {
-          const item = (inventory[selectedLocation] || []).find(i => i.id === log.itemId);
-          if (item) {
-               const newQty = log.type === 'usage' ? item.quantity - log.quantity : item.quantity + log.quantity;
-               return supabase.from('inventory_items').update({ quantity: newQty }).eq('id', log.itemId);
-          }
-          return Promise.resolve();
-      });
-      
-      const dbTxs = newTransactions.map(t => ({
-          date: t.date,
-          type: t.type,
-          status: 'completed',
-          from_location: t.fromLocation,
-          to_location: t.toLocation,
-          item_name_en: t.itemNameEn,
-          item_name_ar: t.itemNameAr,
-          quantity: t.quantity,
-          unit: t.unit,
-          performed_by: t.performedBy,
-          notes: t.notes
-      }));
-      
-      const promises: Promise<any>[] = [...inventoryPromises];
-      if (dbTxs.length > 0) {
-          promises.push(supabase.from('transactions').insert(dbTxs) as any);
+          
+          await Promise.all(promises);
+      } catch (error) {
+          console.error("Error in handleBulkLog:", error);
       }
-      
-      await Promise.all(promises);
   };
 
   if (loading) {
