@@ -16,12 +16,16 @@ export interface InventoryItem {
   minThreshold: number;
   lastUpdated: string;
   locationId?: string; // Used in global view
+  expirationDate?: string;
+  barcode?: string;
 }
 
 export interface LocationData {
   id: LocationId;
   name: string;
+  nameAr?: string;
   description: string;
+  descriptionAr?: string;
   icon: string;
   type?: 'central' | 'branch' | 'global';
 }
@@ -31,9 +35,11 @@ export interface User {
   username: string;
   password?: string;
   name: string;
+  nameAr?: string;
   role: UserRole;
   branchCode?: string;
   branchName?: string;
+  branchNameAr?: string;
   accessibleBranches?: string[];
 }
 

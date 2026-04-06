@@ -19,13 +19,13 @@ const LocationSelection: React.FC<LocationSelectionProps> = ({ onSelect, onLogou
   const getLocationName = (loc: LocationData) => {
     if (loc.id === 'warehouse') return t.warehouse;
     if (loc.id === 'mammal') return t.mammal;
-    return loc.name;
+    return language === 'ar' ? (loc.nameAr || loc.name) : loc.name;
   };
 
   const getLocationDesc = (loc: LocationData) => {
     if (loc.id === 'warehouse') return t.warehouseDesc;
     if (loc.id === 'mammal') return t.mammalDesc;
-    return loc.description || 'Branch Inventory Location';
+    return language === 'ar' ? (loc.descriptionAr || loc.description || 'موقع مخزون الفرع') : (loc.description || 'Branch Inventory Location');
   };
 
   const renderIcon = (iconName: string, className: string) => {

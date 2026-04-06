@@ -4,14 +4,18 @@ export const LOCATIONS: LocationData[] = [
   {
     id: 'warehouse',
     name: 'Warehouse',
+    nameAr: 'المستودع',
     description: 'Main storage facility for bulk items and raw materials.',
+    descriptionAr: 'مرفق التخزين الرئيسي للمواد والمواد الخام.',
     icon: 'warehouse',
     type: 'central'
   },
   {
     id: 'mammal',
     name: 'Mammal',
+    nameAr: 'المعمل',
     description: 'Production and processing unit.',
+    descriptionAr: 'وحدة الإنتاج والمعالجة.',
     icon: 'factory',
     type: 'central'
   }
@@ -101,6 +105,7 @@ export const TRANSLATIONS = {
     updateUser: "Update User",
     role: "Role",
     fullName: "Full Name",
+    fullNameAr: "Full Name (Arabic)",
     saveUser: "Save User",
     cancel: "Cancel",
     transferStock: "Transfer Stock",
@@ -148,6 +153,7 @@ export const TRANSLATIONS = {
     central: "Central",
     branch: "Branch",
     branchName: "Branch Name",
+    branchNameAr: "Branch Name (Arabic)",
     branchCode: "Branch Code",
     branchCodePlaceholder: "e.g., BR001",
     branchNamePlaceholder: "e.g., Downtown Branch",
@@ -310,6 +316,7 @@ export const TRANSLATIONS = {
     updateUser: "تحديث المستخدم",
     role: "الدور",
     fullName: "الاسم الكامل",
+    fullNameAr: "الاسم الكامل (بالعربية)",
     saveUser: "حفظ المستخدم",
     cancel: "إلغاء",
     transferStock: "نقل المخزون",
@@ -357,6 +364,7 @@ export const TRANSLATIONS = {
     central: "مركزي",
     branch: "فرع",
     branchName: "اسم الفرع",
+    branchNameAr: "اسم الفرع (بالعربية)",
     branchCode: "كود الفرع",
     branchCodePlaceholder: "مثال: BR001",
     branchNamePlaceholder: "مثال: فرع وسط البلد",

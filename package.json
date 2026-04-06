@@ -10,17 +10,18 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
     "@google/genai": "^1.41.0",
-    "lucide-react": "^0.564.0",
+    "@supabase/supabase-js": "^2.95.3",
+    "@vitejs/plugin-react": "^5.1.4",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
-    "xlsx": "^0.18.5",
+    "lucide-react": "^0.564.0",
     "pdfjs-dist": "^5.4.624",
-    "@supabase/supabase-js": "^2.95.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
     "vite": "^7.3.1",
-    "@vitejs/plugin-react": "^5.1.4"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

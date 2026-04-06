@@ -22,7 +22,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
         category: '',
         quantity: '',
         unit: '',
-        minThreshold: ''
+        minThreshold: '',
+        expirationDate: '',
+        barcode: ''
     });
 
     const [error, setError] = useState('');
@@ -37,12 +39,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
                 category: initialData.category,
                 quantity: initialData.quantity.toString(),
                 unit: initialData.unit,
-                minThreshold: initialData.minThreshold.toString()
+                minThreshold: initialData.minThreshold.toString(),
+                expirationDate: initialData.expirationDate || '',
+                barcode: initialData.barcode || ''
             });
             setError('');
         } else if (isOpen && !initialData) {
             // Reset if opening in Add mode
-            setNewItem({ nameEn: '', nameAr: '', description: '', category: '', quantity: '', unit: '', minThreshold: '' });
+            setNewItem({ nameEn: '', nameAr: '', description: '', category: '', quantity: '', unit: '', minThreshold: '', expirationDate: '', barcode: '' });
             setError('');
         }
     }, [isOpen, initialData]);
@@ -80,6 +84,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
             quantity: qty,
             unit: newItem.unit,
             minThreshold: threshold,
+            expirationDate: newItem.expirationDate || undefined,
+            barcode: newItem.barcode || undefined
         });
         onClose();
     };
@@ -158,6 +164,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
                         <input
                             required
                             type="text"
+                            list="category-suggestions"
                             value={newItem.category}
                             onChange={e => {
                                 setNewItem({...newItem, category: e.target.value});
@@ -165,6 +172,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
                             }}
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
                         />
+                        <datalist id="category-suggestions">
+                            {Array.from(new Set(existingItems.map(i => i.category))).sort().map(cat => (
+                                <option key={cat} value={cat} />
+                            ))}
+                        </datalist>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -214,6 +226,33 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onSubmit, 
                             className={`w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t.thresholdDesc}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiration Date (Optional)</label>
+                        <input
+                            type="date"
+                            value={newItem.expirationDate}
+                            onChange={e => {
+                                setNewItem({...newItem, expirationDate: e.target.value});
+                                setError('');
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Barcode / QR Code (Optional)</label>
+                        <input
+                            type="text"
+                            value={newItem.barcode}
+                            onChange={e => {
+                                setNewItem({...newItem, barcode: e.target.value});
+                                setError('');
+                            }}
+                            placeholder="Scan or enter barcode"
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                        />
                     </div>
 
                     {error && (

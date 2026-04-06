@@ -5,10 +5,22 @@ create extension if not exists "uuid-ossp";
 create table if not exists public.locations (
   id text primary key,
   name text not null,
+  name_ar text,
   description text,
+  description_ar text,
   icon text,
   type text
 );
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='locations' and column_name='name_ar') then
+    alter table public.locations add column name_ar text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='locations' and column_name='description_ar') then
+    alter table public.locations add column description_ar text;
+  end if;
+end $$;
 
 -- 2. App Users Table
 create table if not exists public.app_users (
@@ -16,9 +28,11 @@ create table if not exists public.app_users (
   username text unique not null,
   password text not null, -- Note: Storing plain text for demo parity. Use Auth in production.
   name text not null,
+  name_ar text,
   role text not null,
   branch_code text,
   branch_name text,
+  branch_name_ar text,
   accessible_branches text[]
 );
 
@@ -27,6 +41,12 @@ do $$
 begin
   if not exists (select 1 from information_schema.columns where table_name='app_users' and column_name='accessible_branches') then
     alter table public.app_users add column accessible_branches text[];
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='app_users' and column_name='name_ar') then
+    alter table public.app_users add column name_ar text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='app_users' and column_name='branch_name_ar') then
+    alter table public.app_users add column branch_name_ar text;
   end if;
 end $$;
 
@@ -47,6 +67,26 @@ create table if not exists public.inventory_items (
   unique(location_id, name_ar)
 );
 
+-- Add missing columns for inventory_items if they don't exist
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='inventory_items' and column_name='name_en') then
+    alter table public.inventory_items add column name_en text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='inventory_items' and column_name='name_ar') then
+    alter table public.inventory_items add column name_ar text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='inventory_items' and column_name='description') then
+    alter table public.inventory_items add column description text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='inventory_items' and column_name='category') then
+    alter table public.inventory_items add column category text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='inventory_items' and column_name='min_threshold') then
+    alter table public.inventory_items add column min_threshold numeric default 0;
+  end if;
+end $$;
+
 -- 4. Transactions Table
 create table if not exists public.transactions (
   id uuid primary key default uuid_generate_v4(),
@@ -65,14 +105,31 @@ create table if not exists public.transactions (
   rejection_reason text
 );
 
+-- Add missing columns for transactions if they don't exist
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='transactions' and column_name='transfer_group_id') then
+    alter table public.transactions add column transfer_group_id text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='transactions' and column_name='item_name_en') then
+    alter table public.transactions add column item_name_en text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='transactions' and column_name='item_name_ar') then
+    alter table public.transactions add column item_name_ar text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='transactions' and column_name='rejection_reason') then
+    alter table public.transactions add column rejection_reason text;
+  end if;
+end $$;
+
 -- 5. Trigger to automatically create a location when a user is assigned to a new branch
 CREATE OR REPLACE FUNCTION public.handle_new_user_branch()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.branch_code IS NOT NULL THEN
-    INSERT INTO public.locations (id, name, type, icon)
-    VALUES (NEW.branch_code, COALESCE(NEW.branch_name, NEW.branch_code), 'branch', 'store')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    INSERT INTO public.locations (id, name, name_ar, type, icon)
+    VALUES (NEW.branch_code, COALESCE(NEW.branch_name, NEW.branch_code), NEW.branch_name_ar, 'branch', 'store')
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, name_ar = EXCLUDED.name_ar;
   END IF;
   RETURN NEW;
 END;

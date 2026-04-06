@@ -102,7 +102,9 @@ const App: React.FC = () => {
             loadedLocations = locData.map((l: any) => ({
                 id: l.id,
                 name: l.name,
+                nameAr: l.name_ar || l.name,
                 description: l.description || '',
+                descriptionAr: l.description_ar || l.description || '',
                 icon: l.icon || 'store',
                 type: l.type as 'central' | 'branch'
             }));
@@ -116,9 +118,11 @@ const App: React.FC = () => {
                 username: u.username,
                 password: u.password,
                 name: u.name,
+                nameAr: u.name_ar,
                 role: u.role as UserRole,
                 branchCode: u.branch_code,
                 branchName: u.branch_name,
+                branchNameAr: u.branch_name_ar,
                 accessibleBranches: u.accessible_branches || []
             }));
         }
@@ -138,7 +142,9 @@ const App: React.FC = () => {
                     unit: i.unit,
                     minThreshold: Number(i.min_threshold),
                     lastUpdated: i.last_updated,
-                    locationId: i.location_id
+                    locationId: i.location_id,
+                    expirationDate: i.expiration_date,
+                    barcode: i.barcode
                 };
                 if (!newInventory[i.location_id]) newInventory[i.location_id] = [];
                 newInventory[i.location_id].push(item);
@@ -238,6 +244,17 @@ const App: React.FC = () => {
     if (currentUser) {
       requestNotificationPermission();
     }
+    
+    // Auto cleanup transactions if admin
+    if (currentUser?.role === 'admin') {
+        const retentionStr = localStorage.getItem('dawar_retention_months');
+        if (retentionStr) {
+            const months = parseInt(retentionStr, 10);
+            if (!isNaN(months) && months > 0) {
+                handleCleanUpTransactions(months);
+            }
+        }
+    }
   }, [currentUser]);
 
   // Notification Trigger Effect
@@ -254,10 +271,12 @@ const App: React.FC = () => {
     if (relevantIncoming.length > 0) {
       const t_text = TRANSLATIONS[language];
       relevantIncoming.forEach(tx => {
+        const fromLoc = availableLocations.find(l => l.id === tx.fromLocation);
+        const fromLocName = fromLoc ? (fromLoc.id === 'warehouse' ? t_text.warehouse : fromLoc.id === 'mammal' ? t_text.mammal : (language === 'ar' ? (fromLoc.nameAr || fromLoc.name) : fromLoc.name)) : tx.fromLocation;
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification(t_text.incomingRequests, {
-                body: `${language === 'ar' ? tx.itemNameAr : tx.itemNameEn}: ${tx.quantity} ${tx.unit} ${t_text.from} ${tx.fromLocation}`,
+                body: `${language === 'ar' ? tx.itemNameAr : tx.itemNameEn}: ${tx.quantity} ${tx.unit} ${t_text.from} ${fromLocName}`,
                 icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png'
             });
           } catch (e) { console.error("Notification failed", e); }
@@ -289,6 +308,12 @@ const App: React.FC = () => {
         localStorage.setItem('dawar_language', newLang);
         return newLang;
     });
+  };
+
+  const getUserName = (name: string) => {
+      if (language === 'en') return name;
+      const user = users.find(u => u.name === name);
+      return user?.nameAr || name;
   };
 
   const toggleTheme = () => {
@@ -323,6 +348,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCleanUpTransactions = async (months: number) => {
+      if (months === 0) return; // 0 means never
+      const cutoffDate = new Date();
+      cutoffDate.setMonth(cutoffDate.getMonth() - months);
+      const cutoffString = cutoffDate.toISOString();
+
+      const { error } = await supabase
+          .from('transactions')
+          .delete()
+          .lt('date', cutoffString);
+
+      if (error) {
+          console.error("Error cleaning up transactions:", error);
+      } else {
+          setTransactions(prev => prev.filter(t => new Date(t.date) >= cutoffDate));
+      }
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setSelectedLocation(null);
@@ -341,6 +384,7 @@ const App: React.FC = () => {
         const newLoc: LocationData = {
             id: newUser.branchCode,
             name: newUser.branchName || newUser.branchCode,
+            nameAr: newUser.branchNameAr || newUser.branchName || newUser.branchCode,
             description: 'Branch Inventory',
             icon: 'store',
             type: 'branch'
@@ -356,9 +400,11 @@ const App: React.FC = () => {
         username: newUser.username,
         password: newUser.password,
         name: newUser.name,
+        name_ar: newUser.nameAr,
         role: newUser.role,
         branch_code: newUser.branchCode,
         branch_name: newUser.branchName,
+        branch_name_ar: newUser.branchNameAr,
         accessible_branches: newUser.accessibleBranches || []
     }]).select();
     
@@ -368,9 +414,11 @@ const App: React.FC = () => {
             username: data[0].username,
             password: data[0].password,
             name: data[0].name,
+            nameAr: data[0].name_ar,
             role: data[0].role,
             branchCode: data[0].branch_code,
             branchName: data[0].branch_name,
+            branchNameAr: data[0].branch_name_ar,
             accessibleBranches: data[0].accessible_branches
         };
         setUsers(prev => prev.map(u => u.id === tempId ? realUser : u));
@@ -385,6 +433,7 @@ const App: React.FC = () => {
           const newLoc: LocationData = {
               id: updatedUser.branchCode,
               name: updatedUser.branchName || updatedUser.branchCode,
+              nameAr: updatedUser.branchNameAr || updatedUser.branchName || updatedUser.branchCode,
               description: 'Branch Inventory',
               icon: 'store',
               type: 'branch'
@@ -392,7 +441,7 @@ const App: React.FC = () => {
           setLocations(prev => {
               const exists = prev.some(l => l.id === newLoc.id);
               if (exists) {
-                  return prev.map(l => l.id === newLoc.id ? { ...l, name: newLoc.name } : l);
+                  return prev.map(l => l.id === newLoc.id ? { ...l, name: newLoc.name, nameAr: newLoc.nameAr } : l);
               }
               return [...prev, newLoc];
           });
@@ -401,9 +450,11 @@ const App: React.FC = () => {
       const updates: any = {
         username: updatedUser.username,
         name: updatedUser.name,
+        name_ar: updatedUser.nameAr,
         role: updatedUser.role,
         branch_code: updatedUser.branchCode,
         branch_name: updatedUser.branchName,
+        branch_name_ar: updatedUser.branchNameAr,
         accessible_branches: updatedUser.accessibleBranches || []
       };
 
@@ -424,6 +475,12 @@ const App: React.FC = () => {
       // Enforce branch manager restriction
       if (currentUser?.role === 'branch_manager' && currentUser.branchCode !== locationId) {
           console.error("Branch managers can only add items to their own branch.");
+          return;
+      }
+
+      // Enforce warehouse manager restriction
+      if (currentUser?.role === 'warehouse_manager' && locationId !== 'warehouse' && locationId !== 'mammal') {
+          console.error("Warehouse managers can only add items to warehouse or mammal.");
           return;
       }
 
@@ -459,7 +516,9 @@ const App: React.FC = () => {
           category: item.category,
           quantity: item.quantity,
           unit: item.unit,
-          min_threshold: item.minThreshold
+          min_threshold: item.minThreshold,
+          expiration_date: item.expirationDate || null,
+          barcode: item.barcode || null
       }]).select();
 
       if (!error && data && data[0]) {
@@ -483,6 +542,9 @@ const App: React.FC = () => {
   };
 
   const handleEditItem = async (locationId: string, updatedItem: InventoryItem) => {
+      if (currentUser?.role === 'branch_manager' && currentUser.branchCode !== locationId) return;
+      if (currentUser?.role === 'warehouse_manager' && locationId !== 'warehouse' && locationId !== 'mammal') return;
+
       // Check for duplicates (excluding the item itself)
       const existing = (inventory[locationId] || []).find(i => 
           i.id !== updatedItem.id && (
@@ -508,11 +570,16 @@ const App: React.FC = () => {
           category: updatedItem.category,
           quantity: updatedItem.quantity,
           unit: updatedItem.unit,
-          min_threshold: updatedItem.minThreshold
+          min_threshold: updatedItem.minThreshold,
+          expiration_date: updatedItem.expirationDate || null,
+          barcode: updatedItem.barcode || null
       }).eq('id', updatedItem.id);
   };
 
   const handleDeleteItem = async (locationId: string, itemId: string) => {
+     if (currentUser?.role === 'branch_manager' && currentUser.branchCode !== locationId) return;
+     if (currentUser?.role === 'warehouse_manager' && locationId !== 'warehouse' && locationId !== 'mammal') return;
+
      // Optimistic Update
      setInventory(prev => ({
          ...prev,
@@ -604,18 +671,16 @@ const App: React.FC = () => {
     // Backend Calls
     if (newTransactions.length > 0) {
         try {
-            // Sync Inventory updates if manager - Parallelized
+            // Sync Inventory updates if manager - Sequential to avoid rate limits
             if (isManagerOfSource) {
-                const inventoryUpdates = items.map(async (item) => {
+                for (const item of items) {
                     const sourceItem = (inventory[fromLocation] || []).find(i => i.id === item.itemId);
                     if (sourceItem) {
-                        return supabase.from('inventory_items').update({
+                        await supabase.from('inventory_items').update({
                             quantity: sourceItem.quantity - item.quantity
                         }).eq('id', item.itemId);
                     }
-                    return Promise.resolve();
-                });
-                await Promise.all(inventoryUpdates);
+                }
             }
             
             // Save Transactions
@@ -682,15 +747,13 @@ const App: React.FC = () => {
 
           setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'pending_target' } : t));
 
-          // Backend - Parallelized
-          const promises: any[] = [];
+          // Backend - Sequential
           if (sourceItem) {
-              promises.push(supabase.from('inventory_items').update({
+              await supabase.from('inventory_items').update({
                   quantity: sourceItem.quantity - transaction.quantity
-              }).eq('id', sourceItem.id));
+              }).eq('id', sourceItem.id);
           }
-          promises.push(supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id));
-          await Promise.all(promises);
+          await supabase.from('transactions').update({ status: 'pending_target' }).eq('id', transaction.id);
       } catch (error) {
           console.error("Error in handleConfirmSourceTransfer:", error);
       }
@@ -733,14 +796,13 @@ const App: React.FC = () => {
 
           setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'completed' } : t));
 
-          // Backend - Parallelized
-          const promises: any[] = [];
+          // Backend - Sequential
           if (destItem) {
-              promises.push(supabase.from('inventory_items').update({
+              await supabase.from('inventory_items').update({
                   quantity: destItem.quantity + transaction.quantity
-              }).eq('id', destItem.id));
+              }).eq('id', destItem.id);
           } else {
-              promises.push(supabase.from('inventory_items').insert([{
+              await supabase.from('inventory_items').insert([{
                   location_id: targetLocation,
                   name_en: transaction.itemNameEn,
                   name_ar: transaction.itemNameAr,
@@ -748,10 +810,9 @@ const App: React.FC = () => {
                   quantity: transaction.quantity,
                   unit: transaction.unit,
                   min_threshold: 0
-              }]));
+              }]);
           }
-          promises.push(supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id));
-          await Promise.all(promises);
+          await supabase.from('transactions').update({ status: 'completed' }).eq('id', transaction.id);
       } catch (error) {
           console.error("Error in handleReceiveTransfer:", error);
       }
@@ -797,15 +858,14 @@ const App: React.FC = () => {
 
           setTransactions(prev => prev.map(t => t.id === transaction.id ? { ...t, status: 'rejected', rejectionReason: reason } : t));
 
-          // Backend - Parallelized
-          const promises: any[] = [];
+          // Backend - Sequential
           if (wasDeducted) {
               if (sourceItem) {
-                   promises.push(supabase.from('inventory_items').update({
+                   await supabase.from('inventory_items').update({
                       quantity: sourceItem.quantity + transaction.quantity
-                  }).eq('id', sourceItem.id));
+                  }).eq('id', sourceItem.id);
               } else {
-                  promises.push(supabase.from('inventory_items').insert([{
+                  await supabase.from('inventory_items').insert([{
                       location_id: sourceLocation,
                       name_en: transaction.itemNameEn,
                       name_ar: transaction.itemNameAr,
@@ -813,11 +873,10 @@ const App: React.FC = () => {
                       quantity: transaction.quantity,
                       unit: transaction.unit,
                       min_threshold: 0
-                  }]));
+                  }]);
               }
           }
-          promises.push(supabase.from('transactions').update({ status: 'rejected', rejection_reason: reason }).eq('id', transaction.id));
-          await Promise.all(promises);
+          await supabase.from('transactions').update({ status: 'rejected', rejection_reason: reason }).eq('id', transaction.id);
       } catch (error) {
           console.error("Error in handleRejectTransfer:", error);
       }
@@ -855,23 +914,21 @@ const App: React.FC = () => {
           
           setTransactions(prev => [newTx, ...prev]);
 
-          // Backend - Parallelized
-          await Promise.all([
-              supabase.from('inventory_items').update({ quantity: newQty }).eq('id', itemId) as any,
-              supabase.from('transactions').insert([{
-                  date: newTx.date,
-                  type: type,
-                  status: 'completed',
-                  from_location: newTx.fromLocation,
-                  to_location: newTx.toLocation,
-                  item_name_en: newTx.itemNameEn,
-                  item_name_ar: newTx.itemNameAr,
-                  quantity: quantity,
-                  unit: item.unit,
-                  performed_by: currentUser.name,
-                  notes: notes
-              }]) as any
-          ]);
+          // Backend - Sequential
+          await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', itemId);
+          await supabase.from('transactions').insert([{
+              date: newTx.date,
+              type: type,
+              status: 'completed',
+              from_location: newTx.fromLocation,
+              to_location: newTx.toLocation,
+              item_name_en: newTx.itemNameEn,
+              item_name_ar: newTx.itemNameAr,
+              quantity: quantity,
+              unit: item.unit,
+              performed_by: currentUser.name,
+              notes: notes
+          }]);
       }
   };
 
@@ -921,16 +978,15 @@ const App: React.FC = () => {
           setInventory(prev => ({ ...prev, [selectedLocation]: updatedLocationInventory }));
           setTransactions(prev => [...newTransactions, ...prev]);
           
-          // Backend - Parallelized
-          const inventoryPromises = Object.entries(quantityChanges).map(async ([itemId, change]) => {
+          // Backend - Sequential to avoid rate limits
+          for (const [itemId, change] of Object.entries(quantityChanges)) {
               const item = (inventory[selectedLocation] || []).find(i => i.id === itemId);
               if (item) {
-                   return supabase.from('inventory_items').update({ 
+                   await supabase.from('inventory_items').update({ 
                        quantity: item.quantity + change 
                    }).eq('id', itemId);
               }
-              return Promise.resolve();
-          });
+          }
           
           const dbTxs = newTransactions.map(t => ({
               date: t.date,
@@ -946,12 +1002,9 @@ const App: React.FC = () => {
               notes: t.notes
           }));
           
-          const promises: Promise<any>[] = [...inventoryPromises];
           if (dbTxs.length > 0) {
-              promises.push(supabase.from('transactions').insert(dbTxs) as any);
+              await supabase.from('transactions').insert(dbTxs);
           }
-          
-          await Promise.all(promises);
       } catch (error) {
           console.error("Error in handleBulkLog:", error);
       }
@@ -986,6 +1039,8 @@ const App: React.FC = () => {
                 language={language}
                 availableLocations={availableLocations}
                 onManageLocation={setSelectedLocation}
+                onCleanUpTransactions={handleCleanUpTransactions}
+                getUserName={getUserName}
             />
         </div>
      );
@@ -1001,7 +1056,7 @@ const App: React.FC = () => {
                   language={language}
                   onLogTransaction={handleDailyLog}
                   onBulkLogTransaction={handleBulkLog}
-                  userName={currentUser.name}
+                  userName={language === 'ar' ? (currentUser.nameAr || currentUser.name) : currentUser.name}
                   transactions={transactions}
               />
           </div>
@@ -1048,6 +1103,7 @@ const App: React.FC = () => {
       <InventoryDashboard 
         locationId={selectedLocation} 
         inventory={displayInventory}
+        transactions={transactions}
         onBack={() => setSelectedLocation(null)}
         onLogout={handleLogout}
         language={language}
@@ -1067,6 +1123,7 @@ const App: React.FC = () => {
         onRejectTransfer={handleRejectTransfer}
         onConfirmOutbound={handleConfirmSourceTransfer}
         availableLocations={availableLocations}
+        getUserName={getUserName}
       />
     </div>
   );

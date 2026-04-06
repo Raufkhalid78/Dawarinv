@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { Transaction, InventoryItem, Language } from '../types';
 import { TRANSLATIONS } from '../constants';
 
-export const exportTransferPDF = (transactions: Transaction[], language: Language) => {
+export const exportTransferPDF = (transactions: Transaction[], language: Language, fromLocationName: string, toLocationName: string) => {
   const t = TRANSLATIONS[language];
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -29,8 +29,8 @@ export const exportTransferPDF = (transactions: Transaction[], language: Languag
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   const metadataY = 40;
-  doc.text(`${t.from}: ${group.fromLocation}`, isRtl ? 190 : 14, metadataY, { align: isRtl ? 'right' : 'left' });
-  doc.text(`${t.to}: ${group.toLocation}`, isRtl ? 190 : 14, metadataY + 5, { align: isRtl ? 'right' : 'left' });
+  doc.text(`${t.from}: ${fromLocationName}`, isRtl ? 190 : 14, metadataY, { align: isRtl ? 'right' : 'left' });
+  doc.text(`${t.to}: ${toLocationName}`, isRtl ? 190 : 14, metadataY + 5, { align: isRtl ? 'right' : 'left' });
   doc.text(`${t.date}: ${dateStr}`, isRtl ? 190 : 14, metadataY + 10, { align: isRtl ? 'right' : 'left' });
   doc.text(`${t.performedBy}: ${group.performedBy}`, isRtl ? 190 : 14, metadataY + 15, { align: isRtl ? 'right' : 'left' });
 
@@ -77,7 +77,7 @@ export const exportTransferPDF = (transactions: Transaction[], language: Languag
   doc.text(group.performedBy, sigX + 25, stampY + 8, { align: 'center' });
 
   // Draw Official Stamp
-  const locationLabel = (group.fromLocation || 'WAREHOUSE').toUpperCase();
+  const locationLabel = (fromLocationName || 'WAREHOUSE').toUpperCase();
   const stampColor = [0, 51, 102]; // Navy Blue Ink
 
   doc.setDrawColor(stampColor[0], stampColor[1], stampColor[2]);
@@ -123,7 +123,7 @@ export const exportInventoryExcel = (items: InventoryItem[], locationName: strin
   XLSX.writeFile(wb, `Inventory_${locationName}.xlsx`);
 };
 
-export const exportDailyReportPDF = (transactions: Transaction[], locationName: string, language: Language, userName: string | undefined, date?: string) => {
+export const exportDailyReportPDF = (transactions: Transaction[], locationId: string, locationName: string, language: Language, userName: string | undefined, date?: string, getLocationName?: (id: string) => string) => {
   const t = TRANSLATIONS[language];
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -138,7 +138,7 @@ export const exportDailyReportPDF = (transactions: Transaction[], locationName: 
   const dateStr = reportDate.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
 
   // Separating transactions
-  const received = transactions.filter(t => t.type === 'receive' || (t.type === 'transfer' && t.toLocation === locationName));
+  const received = transactions.filter(t => t.type === 'receive' || (t.type === 'transfer' && t.toLocation === locationId));
   const used = transactions.filter(t => t.type === 'usage');
 
   // Header
@@ -168,7 +168,7 @@ export const exportDailyReportPDF = (transactions: Transaction[], locationName: 
     autoTable(doc, {
       startY: finalY + 5,
       head: [[t.itemName, t.quantity, t.from]],
-      body: received.map(tx => [language === 'ar' ? tx.itemNameAr : tx.itemNameEn, `${tx.quantity} ${tx.unit}`, tx.fromLocation || '-']),
+      body: received.map(tx => [language === 'ar' ? tx.itemNameAr : tx.itemNameEn, `${tx.quantity} ${tx.unit}`, getLocationName ? getLocationName(tx.fromLocation || '') : (tx.fromLocation || '-')]),
       theme: 'striped',
       headStyles: { fillColor: [34, 197, 94] }, // Green-500
       styles: { font: isRtl ? 'Cairo' : 'helvetica', halign: isRtl ? 'right' : 'left' }
@@ -226,11 +226,11 @@ export const exportDailyReportPDF = (transactions: Transaction[], locationName: 
   doc.save(`DailyReport_${locationName}_${dateStr.replace(/\//g, '-')}.pdf`);
 };
 
-export const exportDailyReportExcel = (transactions: Transaction[], locationName: string, language: Language, date: string) => {
+export const exportDailyReportExcel = (transactions: Transaction[], locationId: string, locationName: string, language: Language, date: string, getLocationName?: (id: string) => string) => {
     const t = TRANSLATIONS[language];
     
     // Separating transactions
-    const received = transactions.filter(t => t.type === 'receive' || (t.type === 'transfer' && t.toLocation === locationName));
+    const received = transactions.filter(t => t.type === 'receive' || (t.type === 'transfer' && t.toLocation === locationId));
     const used = transactions.filter(t => t.type === 'usage');
   
     const wb = XLSX.utils.book_new();
@@ -242,7 +242,7 @@ export const exportDailyReportExcel = (transactions: Transaction[], locationName
         [t.itemName]: language === 'ar' ? tx.itemNameAr : tx.itemNameEn,
         [t.quantity]: tx.quantity,
         [t.unit]: tx.unit,
-        [t.from]: tx.fromLocation,
+        [t.from]: getLocationName ? getLocationName(tx.fromLocation || '') : (tx.fromLocation || '-'),
         [t.performedBy]: tx.performedBy
       }));
       const wsReceived = XLSX.utils.json_to_sheet(receivedData);

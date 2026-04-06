@@ -31,8 +31,25 @@ import {
     X,
     Save,
     Menu,
-    Calendar
+    Calendar,
+    Settings
 } from 'lucide-react';
+
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
 interface AdminDashboardProps {
     users: User[];
@@ -46,6 +63,8 @@ interface AdminDashboardProps {
     language: Language;
     availableLocations: LocationData[];
     onManageLocation: (locationId: LocationId) => void;
+    onCleanUpTransactions?: (months: number) => Promise<void>;
+    getUserName: (name: string) => string;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
@@ -59,9 +78,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onLogout, 
     language,
     availableLocations,
-    onManageLocation
+    onManageLocation,
+    onCleanUpTransactions,
+    getUserName
 }) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'transactions' | 'inventory' | 'reports'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'transactions' | 'inventory' | 'reports' | 'settings'>('users');
     const [selectedInventoryLocation, setSelectedInventoryLocation] = useState<string>('warehouse');
     const [showUserModal, setShowUserModal] = useState(false);
     
@@ -69,6 +90,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
     const [reportLocation, setReportLocation] = useState('mammal');
     const [reportFilter, setReportFilter] = useState<'all' | 'received' | 'used'>('all');
+
+    const [retentionMonths, setRetentionMonths] = useState<number>(() => {
+        const saved = localStorage.getItem('dawar_retention_months');
+        return saved ? parseInt(saved, 10) : 0;
+    });
+
+    const handleSaveSettings = () => {
+        localStorage.setItem('dawar_retention_months', retentionMonths.toString());
+        alert(language === 'ar' ? 'تم حفظ الإعدادات' : 'Settings saved');
+    };
+
+    const handleManualCleanUp = async () => {
+        if (onCleanUpTransactions) {
+            if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف السجلات القديمة؟' : 'Are you sure you want to delete old records?')) {
+                await onCleanUpTransactions(retentionMonths);
+                alert(language === 'ar' ? 'تم التنظيف بنجاح' : 'Cleanup completed successfully');
+            }
+        }
+    };
 
     const [confirmDelete, setConfirmDelete] = useState<{
         isOpen: boolean;
@@ -87,17 +127,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const [locationType, setLocationType] = useState<'central' | 'branch'>('central');
     const [userForm, setUserForm] = useState<{
         name: string;
+        nameAr?: string;
         username: string;
         password: string;
         role: UserRole;
         branchCode?: string;
         branchName?: string;
+        branchNameAr?: string;
         accessibleBranches: string[];
     }>({
         name: '',
+        nameAr: '',
         username: '',
         password: '',
         role: 'warehouse_manager',
+        branchCode: '',
+        branchName: '',
+        branchNameAr: '',
         accessibleBranches: []
     });
 
@@ -115,11 +161,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setEditingUserId(user.id);
         setUserForm({ 
             name: user.name, 
+            nameAr: user.nameAr || '',
             username: user.username, 
             password: '', 
             role: user.role, 
             branchCode: user.branchCode || '', 
             branchName: user.branchName || '',
+            branchNameAr: user.branchNameAr || '',
             accessibleBranches: user.accessibleBranches || []
         });
         setLocationType(user.role === 'branch_manager' ? 'branch' : 'central');
@@ -170,29 +218,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
 
     const exportToExcel = () => {
+        const locName = selectedInventoryLocation === 'warehouse' ? t.warehouse : selectedInventoryLocation === 'mammal' ? t.mammal : (language === 'ar' ? (availableLocations.find(l => l.id === selectedInventoryLocation)?.nameAr || availableLocations.find(l => l.id === selectedInventoryLocation)?.name) : availableLocations.find(l => l.id === selectedInventoryLocation)?.name) || selectedInventoryLocation;
         const data = currentInventory.map(item => ({
-            'Item Name (EN)': item.nameEn,
-            'Item Name (AR)': item.nameAr,
-            'Category': item.category,
-            'Quantity': item.quantity,
-            'Unit': item.unit,
-            'Last Updated': item.lastUpdated
+            [t.itemNameEn]: item.nameEn,
+            [t.itemNameAr]: item.nameAr,
+            [t.category]: item.category,
+            [t.quantity]: item.quantity,
+            [t.unit]: item.unit,
+            [t.lastUpdated]: item.lastUpdated
         }));
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Inventory");
-        XLSX.writeFile(wb, `Inventory_${selectedInventoryLocation}.xlsx`);
+        XLSX.writeFile(wb, `Inventory_${locName}.xlsx`);
     };
 
     const exportToPDF = () => {
+        const locName = selectedInventoryLocation === 'warehouse' ? t.warehouse : selectedInventoryLocation === 'mammal' ? t.mammal : (language === 'ar' ? (availableLocations.find(l => l.id === selectedInventoryLocation)?.nameAr || availableLocations.find(l => l.id === selectedInventoryLocation)?.name) : availableLocations.find(l => l.id === selectedInventoryLocation)?.name) || selectedInventoryLocation;
         const doc = new jsPDF();
-        doc.text(`Inventory Report - ${selectedInventoryLocation}`, 14, 15);
+        doc.text(`${t.inventory} - ${locName}`, 14, 15);
         autoTable(doc, {
             startY: 20,
-            head: [['Name (EN)', 'Name (AR)', 'Category', 'Quantity', 'Unit', 'Last Updated']],
+            head: [[t.itemNameEn, t.itemNameAr, t.category, t.quantity, t.unit, t.lastUpdated]],
             body: currentInventory.map(item => [item.nameEn, item.nameAr, item.category, item.quantity, item.unit, item.lastUpdated]),
         });
-        doc.save(`Inventory_${selectedInventoryLocation}.pdf`);
+        doc.save(`Inventory_${locName}.pdf`);
     };
 
     // Filter transactions for Reports tab (Base: Date & Location)
@@ -213,6 +263,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (reportFilter === 'used') return t.type === 'usage';
         return true;
     });
+
+    // --- Chart Data Preparation ---
+    // 1. Transactions Over Time (Last 7 days)
+    const last7Days = Array.from({length: 7}, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toISOString().split('T')[0];
+    }).reverse();
+
+    const transactionsOverTime = last7Days.map(date => {
+        const dayTx = transactions.filter(t => t.date.startsWith(date));
+        return {
+            date: date.substring(5), // MM-DD
+            received: dayTx.filter(t => t.type === 'receive' || t.type === 'transfer').length,
+            used: dayTx.filter(t => t.type === 'usage').length
+        };
+    });
+
+    // 2. Stock Distribution by Location
+    const stockDistribution = availableLocations.map(loc => {
+        const locInventory = inventory[loc.id] || [];
+        const totalItems = locInventory.reduce((sum, item) => sum + item.quantity, 0);
+        return {
+            name: loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name),
+            value: totalItems
+        };
+    }).filter(d => d.value > 0);
+
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+
+    // 3. Top Used Items
+    const usageByItem = transactions
+        .filter(t => t.type === 'usage')
+        .reduce((acc, t) => {
+            const name = language === 'ar' ? t.itemNameAr : t.itemNameEn;
+            acc[name] = (acc[name] || 0) + t.quantity;
+            return acc;
+        }, {} as Record<string, number>);
+
+    const topUsedItems = Object.entries(usageByItem)
+        .map(([name, quantity]) => ({ name, quantity: quantity as number }))
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5);
 
     return (
         <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
@@ -258,7 +351,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             { id: 'users', label: t.users, icon: Users },
                             { id: 'inventory', label: t.inventory, icon: Package },
                             { id: 'reports', label: t.reports, icon: FileText },
-                            { id: 'transactions', label: t.viewLogs, icon: History }
+                            { id: 'transactions', label: t.viewLogs, icon: History },
+                            { id: 'settings', label: language === 'ar' ? 'الإعدادات' : 'Settings', icon: Settings }
                         ].map(item => (
                             <button
                                 key={item.id}
@@ -315,14 +409,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                                 </button>
                                             </div>
                                         </div>
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">{user.name}</h3>
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">{language === 'ar' ? (user.nameAr || user.name) : user.name}</h3>
                                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 truncate">@{user.username}</p>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${user.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : user.role === 'branch_manager' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}`}>
                                                 {t[user.role]}
                                             </span>
-                                            {user.branchName && (
-                                                <span className="text-xs text-gray-400 truncate">• {user.branchName}</span>
+                                            {(user.branchName || user.branchNameAr) && (
+                                                <span className="text-xs text-gray-400 truncate">• {language === 'ar' ? (user.branchNameAr || user.branchName) : user.branchName}</span>
                                             )}
                                         </div>
                                     </div>
@@ -356,7 +450,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             onClick={() => setSelectedInventoryLocation(loc.id)}
                                             className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${selectedInventoryLocation === loc.id ? 'bg-brand-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100'}`}
                                         >
-                                            {loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}
+                                            {loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name)}
                                         </button>
                                     ))}
                                 </div>
@@ -445,13 +539,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             className="px-3 py-2 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-600 text-sm focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white"
                                         >
                                             {availableLocations.map(loc => (
-                                                <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}</option>
+                                                <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name)}</option>
                                             ))}
                                         </select>
                                     </div>
                                     <div className="flex items-end gap-2">
                                         <button 
-                                            onClick={() => exportDailyReportExcel(filteredReports, reportLocation, language, reportDate)}
+                                            onClick={() => {
+                                                const getLocationName = (id: string) => {
+                                                    const loc = availableLocations.find(l => l.id === id);
+                                                    if (!loc) return id;
+                                                    if (loc.id === 'warehouse') return t.warehouse;
+                                                    if (loc.id === 'mammal') return t.mammal;
+                                                    return language === 'ar' ? (loc.nameAr || loc.name) : loc.name;
+                                                };
+                                                const translatedReports = filteredReports.map(tx => ({
+                                                    ...tx,
+                                                    performedBy: getUserName(tx.performedBy)
+                                                }));
+                                                exportDailyReportExcel(translatedReports, reportLocation, reportLocation === 'warehouse' ? t.warehouse : reportLocation === 'mammal' ? t.mammal : (language === 'ar' ? (availableLocations.find(l => l.id === reportLocation)?.nameAr || availableLocations.find(l => l.id === reportLocation)?.name) : availableLocations.find(l => l.id === reportLocation)?.name) || reportLocation, language, reportDate, getLocationName);
+                                            }}
                                             disabled={filteredReports.length === 0}
                                             className="p-2.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             title={t.exportExcel}
@@ -459,13 +566,86 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             <FileSpreadsheet className="w-5 h-5" />
                                         </button>
                                         <button 
-                                            onClick={() => exportDailyReportPDF(filteredReports, reportLocation, language, undefined, reportDate)}
+                                            onClick={() => {
+                                                const getLocationName = (id: string) => {
+                                                    const loc = availableLocations.find(l => l.id === id);
+                                                    if (!loc) return id;
+                                                    if (loc.id === 'warehouse') return t.warehouse;
+                                                    if (loc.id === 'mammal') return t.mammal;
+                                                    return language === 'ar' ? (loc.nameAr || loc.name) : loc.name;
+                                                };
+                                                const translatedReports = filteredReports.map(tx => ({
+                                                    ...tx,
+                                                    performedBy: getUserName(tx.performedBy)
+                                                }));
+                                                exportDailyReportPDF(translatedReports, reportLocation, reportLocation === 'warehouse' ? t.warehouse : reportLocation === 'mammal' ? t.mammal : (language === 'ar' ? (availableLocations.find(l => l.id === reportLocation)?.nameAr || availableLocations.find(l => l.id === reportLocation)?.name) : availableLocations.find(l => l.id === reportLocation)?.name) || reportLocation, language, undefined, reportDate, getLocationName);
+                                            }}
                                             disabled={filteredReports.length === 0}
                                             className="p-2.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             title={t.exportPDF}
                                         >
                                             <FileText className="w-5 h-5" />
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Charts Section */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 lg:col-span-2">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Transactions (Last 7 Days)</h3>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={transactionsOverTime}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                                                <XAxis dataKey="date" stroke="#6B7280" fontSize={12} />
+                                                <YAxis stroke="#6B7280" fontSize={12} />
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                                <Legend />
+                                                <Line type="monotone" dataKey="received" name={t.receive} stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                                <Line type="monotone" dataKey="used" name={t.usage} stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Stock Distribution</h3>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={stockDistribution}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={60}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {stockDistribution.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 lg:col-span-3">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Top Used Items</h3>
+                                    <div className="h-64">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={topUsedItems} layout="vertical" margin={{ left: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+                                                <XAxis type="number" stroke="#6B7280" fontSize={12} />
+                                                <YAxis dataKey="name" type="category" stroke="#6B7280" fontSize={12} width={100} />
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                                <Bar dataKey="quantity" name={t.quantity} fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
                                     </div>
                                 </div>
                             </div>
@@ -520,12 +700,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                                                 : <span className="inline-flex items-center gap-1 text-green-600 font-bold text-xs bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded"><ArrowUpCircle className="w-3 h-3" /> {t.receive}</span>
                                                             }
                                                         </td>
-                                                        <td className="px-6 py-3 font-medium text-gray-900 dark:text-white">{tx.itemName}</td>
+                                                        <td className="px-6 py-3 font-medium text-gray-900 dark:text-white">{language === 'ar' ? tx.itemNameAr : tx.itemNameEn}</td>
                                                         <td className="px-6 py-3 font-mono text-gray-600 dark:text-gray-400">{tx.quantity} {tx.unit}</td>
                                                         <td className="px-6 py-3 text-gray-500 text-xs">
-                                                            {tx.type === 'usage' ? tx.notes || '-' : `${t.from}: ${tx.fromLocation}`}
+                                                            {tx.type === 'usage' ? tx.notes || '-' : `${t.from}: ${tx.fromLocation ? (availableLocations.find(l => l.id === tx.fromLocation)?.id === 'warehouse' ? t.warehouse : availableLocations.find(l => l.id === tx.fromLocation)?.id === 'mammal' ? t.mammal : (language === 'ar' ? (availableLocations.find(l => l.id === tx.fromLocation)?.nameAr || availableLocations.find(l => l.id === tx.fromLocation)?.name) : availableLocations.find(l => l.id === tx.fromLocation)?.name) || tx.fromLocation) : '-'}`}
                                                         </td>
-                                                        <td className="px-6 py-3 text-gray-500 text-xs">{tx.performedBy}</td>
+                                                        <td className="px-6 py-3 text-gray-500 text-xs">{getUserName(tx.performedBy)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -563,7 +743,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                                         {tx.type === 'transfer' ? <span className="text-blue-600">{t.transfer}</span> : tx.type === 'usage' ? <span className="text-red-600">{t.usage}</span> : <span className="text-green-600">{t.receive}</span>}
                                                     </td>
                                                     <td className="px-4 sm:px-6 py-4 font-medium truncate max-w-[100px] sm:max-w-none">{language === 'ar' ? tx.itemNameAr : tx.itemNameEn}</td>
-                                                    <td className="hidden sm:table-cell px-6 py-4 text-gray-500 truncate max-w-[120px]">{tx.performedBy}</td>
+                                                    <td className="hidden sm:table-cell px-6 py-4 text-gray-500 truncate max-w-[120px]">{getUserName(tx.performedBy)}</td>
                                                     <td className="px-4 sm:px-6 py-4 font-bold">
                                                         <span className={tx.status === 'completed' ? 'text-green-600' : tx.status === 'rejected' ? 'text-red-600' : 'text-orange-600'}>{t[tx.status] || tx.status}</span>
                                                     </td>
@@ -574,6 +754,73 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             )}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'settings' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="mb-8">
+                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{language === 'ar' ? 'الإعدادات' : 'Settings'}</h2>
+                                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{language === 'ar' ? 'إدارة إعدادات النظام' : 'Manage system settings'}</p>
+                            </div>
+
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 max-w-2xl">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <History className="w-5 h-5 text-brand-500" />
+                                    {language === 'ar' ? 'الاحتفاظ بالبيانات' : 'Data Retention'}
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                    {language === 'ar' 
+                                        ? 'حدد المدة التي تريد الاحتفاظ فيها بسجلات العمليات. سيتم حذف السجلات الأقدم من هذه المدة تلقائياً.' 
+                                        : 'Select how long you want to keep transaction logs. Logs older than this period will be deleted automatically.'}
+                                </p>
+
+                                <div className="flex flex-col sm:flex-row gap-4 items-end mb-6">
+                                    <div className="flex-1 w-full">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {language === 'ar' ? 'مدة الاحتفاظ' : 'Retention Period'}
+                                        </label>
+                                        <select 
+                                            value={retentionMonths}
+                                            onChange={(e) => setRetentionMonths(parseInt(e.target.value, 10))}
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                                        >
+                                            <option value={0}>{language === 'ar' ? 'أبداً (الاحتفاظ بكل شيء)' : 'Never (Keep everything)'}</option>
+                                            <option value={1}>{language === 'ar' ? 'شهر واحد' : '1 Month'}</option>
+                                            <option value={3}>{language === 'ar' ? '3 أشهر' : '3 Months'}</option>
+                                            <option value={4}>{language === 'ar' ? '4 أشهر' : '4 Months'}</option>
+                                            <option value={6}>{language === 'ar' ? '6 أشهر' : '6 Months'}</option>
+                                            <option value={12}>{language === 'ar' ? '12 شهر' : '12 Months'}</option>
+                                        </select>
+                                    </div>
+                                    <button 
+                                        onClick={handleSaveSettings}
+                                        className="w-full sm:w-auto px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Save className="w-4 h-4" />
+                                        {language === 'ar' ? 'حفظ' : 'Save'}
+                                    </button>
+                                </div>
+
+                                <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
+                                        {language === 'ar' ? 'تنظيف يدوي' : 'Manual Cleanup'}
+                                    </h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                        {language === 'ar' 
+                                            ? 'يمكنك تشغيل عملية التنظيف الآن لحذف السجلات القديمة بناءً على الإعداد أعلاه.' 
+                                            : 'You can run the cleanup process now to delete old records based on the setting above.'}
+                                    </p>
+                                    <button 
+                                        onClick={handleManualCleanUp}
+                                        disabled={retentionMonths === 0}
+                                        className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        {language === 'ar' ? 'تنظيف الآن' : 'Clean Up Now'}
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -590,9 +837,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <button onClick={() => setShowUserModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"><X className="w-5 h-5" /></button>
                         </div>
                         <form onSubmit={handleUserSubmit} className="space-y-4 sm:space-y-5">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.fullName}</label>
-                                <input required type="text" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.fullName}</label>
+                                    <input required type="text" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.fullNameAr || 'Full Name (Arabic)'}</label>
+                                    <input type="text" value={userForm.nameAr || ''} onChange={e => setUserForm({...userForm, nameAr: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" dir="rtl" />
+                                </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
@@ -625,9 +878,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             ) : (
                                 <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-800">
                                     <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase">{t.userAssignedBranch}</p>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.branchName}</label>
-                                        <input required type="text" value={userForm.branchName} onChange={e => setUserForm({...userForm, branchName: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.branchName}</label>
+                                            <input required type="text" value={userForm.branchName} onChange={e => setUserForm({...userForm, branchName: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.branchNameAr || 'Branch Name (Arabic)'}</label>
+                                            <input type="text" value={userForm.branchNameAr || ''} onChange={e => setUserForm({...userForm, branchNameAr: e.target.value})} className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 text-sm" dir="rtl" />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.branchCode}</label>
@@ -654,7 +913,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                                         className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
                                                     />
                                                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                                                        {loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}
+                                                        {loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name)}
                                                     </span>
                                                 </label>
                                             ))}

@@ -6,6 +6,7 @@ import TransferModal from './TransferModal';
 import AddItemModal from './AddItemModal';
 import UsageModal from './UsageModal';
 import BulkEditModal from './BulkEditModal';
+import ItemHistoryModal from './ItemHistoryModal';
 import { extractTextFromPDF, parseTransferDocument } from '../services/pdfService';
 import { exportTransferPDF } from '../services/exportService';
 import { 
@@ -46,6 +47,7 @@ import {
 interface InventoryDashboardProps {
   locationId: LocationId;
   inventory: InventoryItem[];
+  transactions: Transaction[];
   onBack: () => void;
   onLogout: () => void;
   language: Language;
@@ -65,11 +67,13 @@ interface InventoryDashboardProps {
   onRejectTransfer: (transaction: Transaction, reason: string) => void;
   onConfirmOutbound: (transaction: Transaction) => void;
   availableLocations: LocationData[];
+  getUserName: (name: string) => string;
 }
 
 const InventoryDashboard: React.FC<InventoryDashboardProps> = ({ 
   locationId, 
   inventory, 
+  transactions,
   onBack, 
   onLogout, 
   language,
@@ -88,7 +92,8 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   onReceiveTransfer,
   onRejectTransfer,
   onConfirmOutbound,
-  availableLocations
+  availableLocations,
+  getUserName
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -104,6 +109,8 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
@@ -135,7 +142,20 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
   const isGlobalView = locationId === 'all';
   const t = TRANSLATIONS[language];
-  const location = availableLocations.find(l => l.id === locationId) || (isGlobalView ? { id: 'all', name: t.globalInventory, icon: 'globe' } : { id: locationId, name: locationId });
+  const locationData = availableLocations.find(l => l.id === locationId);
+  const locationName = isGlobalView ? t.globalInventory : (locationId === 'warehouse' ? t.warehouse : locationId === 'mammal' ? t.mammal : (locationData ? (language === 'ar' ? (locationData.nameAr || locationData.name) : locationData.name) : locationId));
+  const location = locationData || (isGlobalView ? { id: 'all', name: t.globalInventory, icon: 'globe' } : { id: locationId, name: locationId });
+
+  const canEditItem = userRole === 'admin' || 
+                      (userRole === 'branch_manager' && userBranchCode === locationId) ||
+                      (userRole === 'warehouse_manager' && (locationId === 'warehouse' || locationId === 'mammal'));
+
+  const canBulkEdit = userRole === 'admin' || (userRole === 'warehouse_manager' && (locationId === 'warehouse' || locationId === 'mammal'));
+
+  const canRecordUsage = userRole === 'admin' || 
+                         (userRole === 'branch_manager' && userBranchCode === locationId) ||
+                         (userRole === 'warehouse_manager' && locationId === 'warehouse') ||
+                         (userRole === 'mammal_employee' && locationId === 'mammal');
 
   const categories = useMemo(() => {
     const cats = new Set(inventory.map(item => item.category));
@@ -150,7 +170,8 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         itemName.toLowerCase().includes(searchLower) || 
         item.category.toLowerCase().includes(searchLower) ||
         (item.description && item.description.toLowerCase().includes(searchLower)) ||
-        (item.locationId && item.locationId.toLowerCase().includes(searchLower));
+        (item.locationId && item.locationId.toLowerCase().includes(searchLower)) ||
+        (item.barcode && item.barcode.toLowerCase().includes(searchLower));
       
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
       const isLowStock = item.quantity <= item.minThreshold;
@@ -178,9 +199,24 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     });
   }, [inventory, search, selectedCategory, stockStatusFilter, language, sortBy, sortOrder]);
 
-  const lowStockItems = inventory.filter(item => item.quantity <= item.minThreshold);
-  const locationName = isGlobalView ? t.globalInventory : (location.id === 'warehouse' ? t.warehouse : location.id === 'mammal' ? t.mammal : (location as LocationData).name);
+  const isExpiringSoon = (dateString?: string) => {
+    if (!dateString) return false;
+    const expDate = new Date(dateString);
+    const today = new Date();
+    const diffTime = expDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 30 && diffDays >= 0;
+  };
 
+  const isExpired = (dateString?: string) => {
+    if (!dateString) return false;
+    const expDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return expDate < today;
+  };
+
+  const lowStockItems = inventory.filter(item => item.quantity <= item.minThreshold);
   const groupedIncoming = useMemo(() => {
       const groups: Record<string, Transaction[]> = {};
       incomingTransfers.forEach(tx => {
@@ -226,14 +262,27 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   const handleBulkAccept = async (groupId: string) => {
       const group = groupedIncoming.find(g => g[0] === groupId);
       if (group) {
-          await Promise.all(group[1].map(tx => onReceiveTransfer(tx)));
+          for (const tx of group[1]) {
+              await onReceiveTransfer(tx);
+          }
       }
   };
 
   const handleDownloadTransfer = (groupId: string, type: 'incoming' | 'outgoing') => {
     const group = (type === 'incoming' ? groupedIncoming : groupedOutgoing).find(g => g[0] === groupId);
     if (group) {
-      exportTransferPDF(group[1], language);
+      const tx = group[1][0];
+      const fromLoc = availableLocations.find(l => l.id === tx.fromLocation);
+      const toLoc = availableLocations.find(l => l.id === tx.toLocation);
+      const fromLocationName = fromLoc ? (fromLoc.id === 'warehouse' ? t.warehouse : fromLoc.id === 'mammal' ? t.mammal : (language === 'ar' ? (fromLoc.nameAr || fromLoc.name) : fromLoc.name)) : (tx.fromLocation || '');
+      const toLocationName = toLoc ? (toLoc.id === 'warehouse' ? t.warehouse : toLoc.id === 'mammal' ? t.mammal : (language === 'ar' ? (toLoc.nameAr || toLoc.name) : toLoc.name)) : (tx.toLocation || '');
+      
+      const translatedTransactions = group[1].map(t => ({
+        ...t,
+        performedBy: getUserName ? getUserName(t.performedBy) : t.performedBy
+      }));
+      
+      exportTransferPDF(translatedTransactions, language, fromLocationName, toLocationName);
     }
   };
 
@@ -285,8 +334,8 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
     setSelectedItemIds(new Set());
   };
 
-  const handleTransferSubmit = (transferItems: { itemId: string, quantity: number }[], toLocation: LocationId, sourceOverride?: LocationId) => {
-    onTransfer(transferItems, toLocation, sourceOverride);
+  const handleTransferSubmit = async (transferItems: { itemId: string, quantity: number }[], toLocation: LocationId, sourceOverride?: LocationId) => {
+    await onTransfer(transferItems, toLocation, sourceOverride);
     setSelectedItemIds(new Set());
     setPdfTransferData(null);
   };
@@ -437,12 +486,15 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               <div className="relative flex-1 min-w-[200px] w-full max-w-md">
                 <input
                   type="text"
-                  placeholder={t.searchPlaceholder}
+                  placeholder={t.searchPlaceholder + " / Barcode"}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-gray-900 dark:text-white transition-all text-sm"
+                  className="w-full pl-10 pr-10 rtl:pr-10 rtl:pl-10 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-gray-900 dark:text-white transition-all text-sm"
                 />
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 rtl:right-3 rtl:left-auto top-3.5" />
+                <div className="absolute right-3 rtl:left-3 rtl:right-auto top-3 text-gray-400 hover:text-brand-500 cursor-pointer" title="Scan Barcode">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 pb-1 sm:pb-0">
@@ -549,7 +601,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                     <ArrowRightLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">{t.transfer}</span>
                  </button>
-                 {(userRole !== 'branch_manager' || userBranchCode === locationId) && (
+                 {canEditItem && (
                     <button onClick={() => { setItemToEdit(null); setIsAddItemModalOpen(true); }} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-brand-200 dark:shadow-none text-sm">
                         <Plus className="w-4 h-4" />
                         <span className="hidden sm:inline">{t.addItem}</span>
@@ -583,11 +635,13 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
               // --- COMPACT BOX VIEW ---
               if (viewMode === 'compact') {
+                  const expiringSoon = isExpiringSoon(item.expirationDate);
+                  const expired = isExpired(item.expirationDate);
                   return (
                     <div 
                       key={item.id} 
                       onClick={() => !isGlobalView && toggleItemSelection(item.id)}
-                      className={`bg-white dark:bg-gray-800 rounded-xl p-3 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all relative flex flex-col items-center text-center cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                      className={`bg-white dark:bg-gray-800 rounded-xl p-3 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all relative flex flex-col items-center text-center cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'} ${expired ? 'border-red-500' : expiringSoon ? 'border-yellow-500' : ''}`}
                     >
                         {isSelected && (
                           <div className="absolute top-2 left-2 z-10">
@@ -595,6 +649,9 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           </div>
                         )}
                         {isLowStock && <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>}
+                        {(expired || expiringSoon) && (
+                            <div className={`absolute top-2 right-[${isLowStock ? '16px' : '8px'}] w-2 h-2 rounded-full ${expired ? 'bg-red-600' : 'bg-yellow-500'}`} title={expired ? 'Expired' : 'Expiring Soon'}></div>
+                        )}
                         <div className={`p-2 rounded-full mb-2 ${isLowStock ? 'bg-red-50 dark:bg-red-900/20 text-red-600' : 'bg-brand-50 dark:bg-brand-900/20 text-brand-600'}`}>
                            <Package className="w-5 h-5" />
                         </div>
@@ -603,13 +660,19 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                         
                         {!isGlobalView && (
                              <div className="flex gap-1 w-full mt-auto" onClick={e => e.stopPropagation()}>
-                                {(userRole !== 'branch_manager' || userBranchCode === locationId) ? (
+                                {canEditItem ? (
                                     <>
                                        <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Pencil className="w-3 h-3 mx-auto" /></button>
                                        <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><ArrowDownCircle className="w-3 h-3 mx-auto" /></button>
+                                       <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Clock className="w-3 h-3 mx-auto" /></button>
+                                    </>
+                                ) : canRecordUsage ? (
+                                    <>
+                                       <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><ArrowDownCircle className="w-3 h-3 mx-auto" /></button>
+                                       <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Clock className="w-3 h-3 mx-auto" /></button>
                                     </>
                                 ) : (
-                                    <div className="flex-1 py-1.5 text-[10px] text-gray-400 italic">View Only</div>
+                                    <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); }} className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600"><Clock className="w-3 h-3 mx-auto" /></button>
                                 )}
                              </div>
                         )}
@@ -619,11 +682,13 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
 
               // --- LIST VIEW ---
               if (viewMode === 'list') {
+                  const expiringSoon = isExpiringSoon(item.expirationDate);
+                  const expired = isExpired(item.expirationDate);
                   return (
                       <div 
                         key={item.id} 
                         onClick={() => !isGlobalView && toggleItemSelection(item.id)}
-                        className={`bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm flex items-center gap-4 cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                        className={`bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm flex items-center gap-4 cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'} ${expired ? 'border-red-500' : expiringSoon ? 'border-yellow-500' : ''}`}
                       >
                           {!isGlobalView && (
                             <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-brand-600 border-brand-600' : 'border-gray-300 dark:border-gray-600'}`}>
@@ -638,10 +703,13 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                               <div className="flex items-center gap-2 mb-1">
                                   <h3 className="text-base font-bold text-gray-900 dark:text-white truncate">{language === 'ar' ? item.nameAr : item.nameEn}</h3>
                                   {isLowStock && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 uppercase">{t.lowStock}</span>}
+                                  {expired && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 uppercase">Expired</span>}
+                                  {expiringSoon && !expired && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400 uppercase">Expiring Soon</span>}
                               </div>
                               <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-2">
                                   <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300">{item.category}</span>
                                   {isGlobalView && item.locationId && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {item.locationId}</span>}
+                                  {item.expirationDate && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {item.expirationDate}</span>}
                               </p>
                           </div>
 
@@ -658,14 +726,20 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                 </button>
                                 {activeActionId === item.id && (
                                    <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20 z-[30]">
-                                       {(userRole !== 'branch_manager' || userBranchCode === locationId) ? (
+                                       {canEditItem ? (
                                            <>
                                               <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Pencil className="w-4 h-4" /> {t.edit}</button>
                                               <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}</button>
+                                              <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-500" /> History</button>
                                               <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2"><Trash2 className="w-4 h-4" /> {t.delete}</button>
                                            </>
+                                       ) : canRecordUsage ? (
+                                           <>
+                                              <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}</button>
+                                              <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-500" /> History</button>
+                                           </>
                                        ) : (
-                                           <div className="px-4 py-2 text-xs text-gray-400 italic">View Only</div>
+                                           <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-500" /> History</button>
                                        )}
                                    </div>
                                 )}
@@ -676,11 +750,13 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
               }
 
               // --- GRID VIEW (DEFAULT) ---
+              const expiringSoon = isExpiringSoon(item.expirationDate);
+              const expired = isExpired(item.expirationDate);
               return (
                 <div 
                   key={item.id} 
                   onClick={() => !isGlobalView && toggleItemSelection(item.id)}
-                  className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all group relative cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'}`}
+                  className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border hover:border-brand-300 dark:hover:border-brand-700 shadow-sm hover:shadow-md transition-all group relative cursor-pointer ${isSelected ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-gray-200 dark:border-gray-700'} ${expired ? 'border-red-500' : expiringSoon ? 'border-yellow-500' : ''}`}
                 >
                   {!isGlobalView && (
                     <div className={`absolute top-4 left-4 z-10 w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-brand-600 border-brand-600 scale-110' : 'bg-white/80 dark:bg-gray-800/80 border-gray-300 dark:border-gray-600 opacity-0 group-hover:opacity-100'}`}>
@@ -693,6 +769,15 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                       <span className="flex h-3 w-3">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      </span>
+                    </div>
+                  )}
+
+                  {(expired || expiringSoon) && (
+                    <div className={`absolute top-4 right-[${isLowStock ? '32px' : '16px'}] z-10`} title={expired ? 'Expired' : 'Expiring Soon'}>
+                      <span className="flex h-3 w-3">
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${expired ? 'bg-red-400' : 'bg-yellow-400'} opacity-75`}></span>
+                        <span className={`relative inline-flex rounded-full h-3 w-3 ${expired ? 'bg-red-600' : 'bg-yellow-500'}`}></span>
                       </span>
                     </div>
                   )}
@@ -710,7 +795,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                           
                           {activeActionId === item.id && (
                              <div className="absolute right-0 rtl:right-auto rtl:left-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-20 animate-in fade-in zoom-in-95 duration-100 z-[30]">
-                                {(userRole !== 'branch_manager' || userBranchCode === locationId) && (
+                                {canEditItem ? (
                                     <>
                                         <button onClick={() => { setItemToEdit(item); setIsAddItemModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
                                             <Pencil className="w-4 h-4" /> {t.edit}
@@ -718,13 +803,26 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
                                         <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
                                             <ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}
                                         </button>
+                                        <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <Clock className="w-4 h-4 text-blue-500" /> History
+                                        </button>
                                         <button onClick={() => { onDeleteItem(locationId, item.id); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-2">
                                             <Trash2 className="w-4 h-4" /> {t.delete}
                                         </button>
                                     </>
-                                )}
-                                {(userRole === 'branch_manager' && userBranchCode !== locationId) && (
-                                    <div className="px-4 py-2 text-xs text-gray-400 italic">View Only</div>
+                                ) : canRecordUsage ? (
+                                    <>
+                                        <button onClick={() => { setUsageItem(item); setIsUsageModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <ArrowDownCircle className="w-4 h-4 text-red-500" /> {t.recordUsage}
+                                        </button>
+                                        <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                            <Clock className="w-4 h-4 text-blue-500" /> History
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button onClick={() => { setHistoryItem(item); setIsHistoryModalOpen(true); setActiveActionId(null); }} className="w-full text-left rtl:text-right px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                        <Clock className="w-4 h-4 text-blue-500" /> History
+                                    </button>
                                 )}
                              </div>
                           )}
@@ -785,7 +883,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
             </div>
             
             <div className="flex items-center gap-2">
-              {(userRole === 'admin' || userRole === 'warehouse_manager') && (
+              {canBulkEdit && (
                 <>
                   <button 
                     onClick={handleBulkEdit}
@@ -865,6 +963,15 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
         selectedCount={selectedItemIds.size}
         onSave={handleBulkEditSave}
         language={language}
+      />
+
+      <ItemHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        item={historyItem}
+        transactions={transactions}
+        language={language}
+        getUserName={getUserName}
       />
 
       <UsageModal

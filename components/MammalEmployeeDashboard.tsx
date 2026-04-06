@@ -343,7 +343,7 @@ const MammalEmployeeDashboard: React.FC<MammalEmployeeDashboardProps> = ({
                             </div>
 
                             <button 
-                                onClick={() => exportDailyReportPDF(todayTransactions, 'mammal', language, userName)}
+                                onClick={() => exportDailyReportPDF(todayTransactions, 'mammal', t.mammal, language, userName)}
                                 className="w-full py-4 bg-gray-900 dark:bg-gray-700 text-white rounded-xl font-bold hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
                             >
                                 <Download className="w-5 h-5" />

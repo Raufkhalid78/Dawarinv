@@ -171,7 +171,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
                             {isGlobal ? (
                                 <select value={sourceLocation} onChange={(e) => { setSourceLocation(e.target.value); setTransferList([]); }} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500">
                                     <option value="">{t.selectLocation}...</option>
-                                    {sources.map(loc => <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}</option>)}
+                                    {sources.map(loc => <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name)}</option>)}
                                 </select>
                             ) : (
                                 <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-900 rounded-xl text-sm font-bold border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-300">{sourceLocation === 'warehouse' ? t.warehouse : sourceLocation === 'mammal' ? t.mammal : sourceLocation}</div>
@@ -181,7 +181,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
                             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">{t.to}</label>
                             <select value={targetLocation} onChange={(e) => setTargetLocation(e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500">
                                 <option value="">{t.selectLocation}...</option>
-                                {destinations.map(loc => <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : loc.name}</option>)}
+                                {destinations.map(loc => <option key={loc.id} value={loc.id}>{loc.id === 'warehouse' ? t.warehouse : loc.id === 'mammal' ? t.mammal : (language === 'ar' ? (loc.nameAr || loc.name) : loc.name)}</option>)}
                             </select>
                         </div>
                     </div>
