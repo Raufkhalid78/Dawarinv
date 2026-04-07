@@ -16,7 +16,7 @@ const ThemeLanguageControls: React.FC<ThemeLanguageControlsProps> = ({
   onToggleTheme
 }) => {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex gap-2 rtl:left-4 rtl:right-auto flex-col-reverse sm:flex-row">
+    <div className="fixed bottom-4 right-4 z-50 flex gap-2 rtl:left-4 rtl:right-auto flex-col-reverse sm:flex-row pb-safe">
       {/* Theme Toggle */}
       <button
         onClick={onToggleTheme}

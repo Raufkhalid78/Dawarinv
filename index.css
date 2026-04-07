@@ -37,3 +37,7 @@ html, body {
 .font-arabic {
   font-family: 'Cairo', sans-serif;
 }
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

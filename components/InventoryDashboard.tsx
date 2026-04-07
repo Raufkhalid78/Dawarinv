@@ -360,7 +360,7 @@ const InventoryDashboard: React.FC<InventoryDashboardProps> = ({
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors ${language === 'ar' ? 'font-arabic' : ''}`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors pb-24 ${language === 'ar' ? 'font-arabic' : ''}`}>
       <div className={`flex-1 flex flex-col transition-all duration-300 ${isAssistantOpen ? 'lg:mr-96 lg:rtl:mr-0 lg:rtl:ml-96' : ''}`}>
         
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20 transition-colors">
